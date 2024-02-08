@@ -1,8 +1,7 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
 import "./globals.css";
-
-const inter = Inter({ subsets: ["latin"] });
+import '@radix-ui/themes/styles.css'
+import { Theme } from "@radix-ui/themes";
 
 export const metadata: Metadata = {
   title: "19tools",
@@ -15,8 +14,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
-      <body className={inter.className}>{children}</body>
+    <html lang="en" className="min-h-svh flex">
+      <body className="flex-1 flex">
+        <Theme className="flex-1 flex justify-center items-center">{children}</Theme>
+      </body>
     </html>
   );
 }
