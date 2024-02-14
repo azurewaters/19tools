@@ -13,6 +13,7 @@ import Html
         , button
         , div
         , h1
+        , header
         , img
         , main_
         , table
@@ -20,7 +21,7 @@ import Html
         , text
         , tr
         )
-import Html.Attributes as Attr
+import Html.Attributes as Attr exposing (href)
 import Html.Events exposing (onClick)
 import VitePluginHelper
 
@@ -85,23 +86,33 @@ view : Model -> Html Msg
 view model =
     main_
         [ Aria.label "main content"
-        , Attr.class "flex flex-col justify-center items-center min-w-full min-h-full font-sans text-center"
+        , Attr.class "flex flex-col justify-center items-start min-w-full min-h-full font-sans"
         ]
-        [ menuOptionGroup
-            "Canadian Immigration Tools"
-            [ MenuOptionDetails "Proof of relationship" "Produce a document that helps prove your relationship to your sponsor." "/proof-of-relationship"
-            , MenuOptionDetails "Proof of contact" "Produce a document that helps prove you have had contact with your sponsor." "/proof-of-contact"
+        [ header_
+        , div
+            [ Attr.class "container mx-auto flex flex-col gap-4 mt-8"
+            ]
+            [ menuOptionGroup
+                "Canadian Immigration Tools"
+                [ MenuOptionDetails "Proof of relationship" "Produce a document that helps prove your relationship to your sponsor." "/proof-of-relationship"
+                , MenuOptionDetails "Proof of contact" "Produce a document that helps prove you have had contact with your sponsor." "/proof-of-contact"
+                ]
             ]
         ]
+
+
+header_ : Html Msg
+header_ =
+    header [ Attr.class "text-lg" ] [ a [ href "/" ] [ text "19tools" ] ]
 
 
 menuOptionGroup : String -> List MenuOptionDetails -> Html Msg
 menuOptionGroup title menuOptionDetails =
     div
-        [ Attr.class "min-h-screen"
+        [ Attr.class "flex flex-col gap-2"
         ]
-        [ h1 [] [ text title ]
-        , div [] (List.map menuOption menuOptionDetails)
+        [ h1 [ Attr.class "text-2xl font-bold" ] [ text title ]
+        , div [ Attr.class "flex flex-col gap-2" ] (List.map menuOption menuOptionDetails)
         ]
 
 
@@ -109,8 +120,9 @@ menuOption : MenuOptionDetails -> Html Msg
 menuOption menuOptionDetails =
     a
         [ Attr.href menuOptionDetails.href
+        , Attr.class "flex flex-col border border-slate-200 rounded-md p-4 hover:bg-slate-100"
         ]
-        [ div [] [ text menuOptionDetails.title ]
+        [ div [ Attr.class "text-xl font-bold" ] [ text menuOptionDetails.title ]
         , div [] [ text menuOptionDetails.description ]
         ]
 
