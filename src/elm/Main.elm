@@ -1,4 +1,4 @@
-port module Main exposing (Model, Msg(..), helloWorld, initialModel, main)
+port module Main exposing (Model, Msg(..), initialModel, main)
 
 import Accessibility.Aria as Aria
 import Browser
@@ -27,21 +27,12 @@ import VitePluginHelper
 
 
 -- CONSTANTS
-
-
-elmLogo : String
-elmLogo =
-    VitePluginHelper.asset "../img/Elm_logo.svg"
-
-
-
 -- MESSAGES
 
 
 type Msg
-    = Increment
-    | Decrement
-    | ChangeTheme String
+    = ChangeTheme String
+    | NoOp
 
 
 
@@ -50,7 +41,13 @@ type Msg
 
 type alias Model =
     { theme : String
-    , count : Int
+    }
+
+
+type alias MenuOptionDetails =
+    { title : String
+    , description : String
+    , href : String
     }
 
 
@@ -61,9 +58,8 @@ type alias Model =
 initialModel : ( Model, Cmd Msg )
 initialModel =
     ( { theme = "light"
-      , count = 0
       }
-    , doNothingCmd
+    , Cmd.none
     )
 
 
@@ -89,159 +85,33 @@ view : Model -> Html Msg
 view model =
     main_
         [ Aria.label "main content"
-        , Attr.class "flex flex-col justify-center items-center w-full h-full font-sans text-center text-neutral-content bg-info bg-opacity-50"
+        , Attr.class "flex flex-col justify-center items-center min-w-full min-h-full font-sans text-center"
         ]
-        [ Icon.css
-        , helloWorld model
+        [ menuOptionGroup
+            "Canadian Immigration Tools"
+            [ MenuOptionDetails "Proof of relationship" "Produce a document that helps prove your relationship to your sponsor." "/proof-of-relationship"
+            , MenuOptionDetails "Proof of contact" "Produce a document that helps prove you have had contact with your sponsor." "/proof-of-contact"
+            ]
         ]
 
 
-helloWorld : Model -> Html Msg
-helloWorld model =
+menuOptionGroup : String -> List MenuOptionDetails -> Html Msg
+menuOptionGroup title menuOptionDetails =
     div
-        [ Attr.class "hero min-h-screen bg-[url('../img/Elm_logo_blue.svg')]"
+        [ Attr.class "min-h-screen"
         ]
-        [ div
-            [ Attr.class "hero-overlay"
-            ]
-            []
-        , div
-            [ Attr.class "hero-content min-h-fit "
-            ]
-            [ div
-                [ Attr.class "max-w-md"
-                ]
-                [ img
-                    [ Aria.label "Elm Logo"
-                    , Attr.src elmLogo
-                    , Attr.class "w-80 mx-auto mb-4 bg-neutral-content border-2 border-neutral-content bg-opacity-75 border-opacity-75"
-                    ]
-                    []
-                , h1
-                    [ Attr.class "mb-2 text-5xl font-bold"
-                    ]
-                    [ text "Hello, Vite + Tailwind + Elm!" ]
-                , themes
-                , docs
-                , counter model
-                , githubLink
-                ]
-            ]
+        [ h1 [] [ text title ]
+        , div [] (List.map menuOption menuOptionDetails)
         ]
 
 
-themes : Html Msg
-themes =
-    div
-        [ Aria.label "Theme Selector"
-        , Attr.class "mt-4"
+menuOption : MenuOptionDetails -> Html Msg
+menuOption menuOptionDetails =
+    a
+        [ Attr.href menuOptionDetails.href
         ]
-        [ button
-            [ Attr.class "btn btn-ghost btn-circle text-3xl"
-            , Aria.label "light theme"
-            , onClick (ChangeTheme "light")
-            ]
-            [ Icon.view Icon.sun
-            ]
-        , button
-            [ Attr.class "btn btn-ghost btn-circle text-3xl"
-            , Aria.label "dark theme"
-            , onClick (ChangeTheme "dark")
-            ]
-            [ Icon.view Icon.moon
-            ]
-        ]
-
-
-docs : Html msg
-docs =
-    let
-        borders : String
-        borders =
-            "border border-slate-300 p-1"
-
-        hovering : String
-        hovering =
-            "hover:bg-neutral-content hover:text-neutral"
-    in
-    table
-        [ Aria.label "Documentation Links"
-        , Attr.class "table-auto mt-4 mx-auto border-separate border-spacing-2"
-        ]
-        [ tr []
-            [ td [ Attr.class borders ]
-                [ Icon.view Icon.book ]
-            , td [ Attr.class <| borders ++ " " ++ hovering ]
-                [ a
-                    [ Attr.href "https://guide.elm-lang.org/"
-                    , Attr.target "_blank"
-                    , Attr.rel "noreferrer noopener"
-                    ]
-                    [ text "Elm Documentation" ]
-                ]
-            , td [ Attr.class <| borders ++ " " ++ hovering ]
-                [ a
-                    [ Attr.href "https://daisyui.com/docs/use/"
-                    , Attr.target "_blank"
-                    , Attr.rel "noreferrer noopener"
-                    ]
-                    [ text "daisyUI Documentation" ]
-                ]
-            ]
-        , tr []
-            [ td [ Attr.class borders ]
-                [ Icon.view Icon.book ]
-            , td [ Attr.class <| borders ++ " " ++ hovering ]
-                [ a
-                    [ Attr.href "https://vitejs.dev/guide/features.html"
-                    , Attr.target "_blank"
-                    , Attr.rel "noreferrer noopener"
-                    ]
-                    [ text "Vite Documentation" ]
-                ]
-            , td [ Attr.class <| borders ++ " " ++ hovering ]
-                [ a
-                    [ Attr.href "https://tailwindcss.com/docs/installation"
-                    , Attr.target "_blank"
-                    , Attr.rel "noreferrer noopener"
-                    ]
-                    [ text "Tailwind Documentation" ]
-                ]
-            ]
-        ]
-
-
-githubLink : Html msg
-githubLink =
-    div [ Attr.class "text-2xl" ]
-        [ a
-            [ Attr.href "https://github.com/gacallea/elm_vite_tailwind_template"
-            , Attr.target "_blank"
-            , Attr.rel "noreferrer noopener"
-            ]
-            [ Icon.view Icon.github ]
-        ]
-
-
-counter : Model -> Html Msg
-counter model =
-    div
-        [ Aria.label "Counter"
-        , Attr.class "text-center mt-4 mb-5"
-        ]
-        [ button
-            [ Aria.label "Decrease Counter"
-            , Attr.class "btn btn-sm btn-outline m-2 text-neutral-content hover:bg-neutral-content hover:text-neutral"
-            , onClick Decrement
-            ]
-            [ text "-" ]
-        , text <| "Count is: " ++ String.fromInt model.count
-        , button
-            [ Aria.label "Increase Counter"
-            , Attr.class "btn btn-sm btn-outline m-2 text-neutral-content hover:bg-neutral-content hover:text-neutral"
-            , onClick Increment
-            ]
-            [ text "+" ]
+        [ div [] [ text menuOptionDetails.title ]
+        , div [] [ text menuOptionDetails.description ]
         ]
 
 
@@ -257,27 +127,12 @@ update msg model =
             , changeTheme string
             )
 
-        Increment ->
-            ( { model | count = model.count + 1 }
-            , Cmd.none
-            )
-
-        Decrement ->
-            ( { model | count = model.count - 1 }
-            , Cmd.none
-            )
+        NoOp ->
+            ( model, Cmd.none )
 
 
 
 -- COMMANDS
-
-
-doNothingCmd : Cmd Msg
-doNothingCmd =
-    Cmd.none
-
-
-
 -- SUBSCRIPTIONS
 
 
