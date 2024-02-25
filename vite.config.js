@@ -1,13 +1,13 @@
 import { defineConfig } from 'vite'
 import elmPlugin from 'vite-plugin-elm'
-import { ViteWebfontDownload } from 'vite-plugin-webfont-dl'
+// import { ViteWebfontDownload } from 'vite-plugin-webfont-dl'
 import viteImagemin from 'vite-plugin-imagemin'
 import viteCompression from 'vite-plugin-compression'
 
 export default defineConfig({
   plugins: [
     elmPlugin(),
-    ViteWebfontDownload(['https://fonts.googleapis.com/css2?family=Lexend+Deca:wght@400;500;600&display=swap']),
+    // ViteWebfontDownload(['https://fonts.googleapis.com/css2?family=Noto+Sans:ital,wght@0,100..900;1,100..900&display=swap']),
     viteImagemin({
       gifsicle: {
         optimizationLevel: 3,

@@ -6,10 +6,10 @@ module.exports = {
     './src/elm/**/*.elm'
   ],
   theme: {
-    extend: {},
-    fontFamily: {
-      sans: ['Lexend Deca', 'sans-serif']
-    }
+    extend: {}
+    // fontFamily: {
+    //   sans: ['Lexend Deca', 'sans-serif']
+    // }
   },
   plugins: [
     require('@tailwindcss/typography'),
