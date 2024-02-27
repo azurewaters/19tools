@@ -1,89 +1,49 @@
 port module Main exposing (Model, Msg(..), main)
 
 import Accessibility.Aria as Aria
-import Browser
+import Browser exposing (Document)
 import Browser.Navigation as Nav
-import FontAwesome as Icon
-import FontAwesome.Brands as Icon
-import FontAwesome.Solid as Icon
-import FontAwesome.Styles as Icon
+import Home
 import Html
     exposing
         ( Html
         , a
-        , button
         , div
-        , h1
         , header
-        , img
-        , input
-        , label
-        , li
-        , main_
-        , ol
-        , p
         , text
         )
-import Html.Attributes as Attr exposing (disabled, href, placeholder, type_, value)
-import Html.Events exposing (on, onClick, onInput)
-import Json.Decode as Decode exposing (Decoder)
+import Html.Attributes as Attr exposing (href)
+import ProofOfContact
+import ProofOfRelationship
 import Url exposing (Url)
-import VitePluginHelper
+import Url.Parser exposing (s, top)
 
 
 
+-- import VitePluginHelper
 -- CONSTANTS
--- MESSAGES
-
-
-type Msg
-    = ChangeTheme String
-    | UrlChanged Url.Url
-    | LinkClicked Browser.UrlRequest
-    | MenuOptionProofOfRelationshipClicked
-    | MenuOptionProofOfContactClicked
-      --  Proof of Relationship
-      -- Proof of Relationship - Home
-    | ProofOfRelationshipCollectDetailsHomeNextClicked
-      -- Proof of Relationship - Collect Details
-    | ProofOfRelationshipCollectDetailsApplicantsLastNameInputted String
-    | ProofOfRelationshipCollectDetailsApplicantsFirstNameInputted String
-    | ProofOfRelationshipCollectDetailsSponsorsNameInputted String
-    | ProofOfRelationshipCollectDetailsDocumentNameInputted String
-    | ProofOfRelationshipCollectDetailsPreviousClicked
-    | ProofOfRelationshipCollectDetailsNextClicked
-      -- Proof of Relationship - Upload Pictures
-    | ProofOfRelationshipUploadPicturesPicturesDragOver
-    | ProofOfRelationshipUploadPicturesPicturesDropped
-    | ProofOfRelationshipUploadPicturesAddPicturesClicked
-    | ProofOfRelationshipUploadPicturesPreviousClicked
-    | ProofOfRelationshipUploadPicturesNextClicked
-      -- Other
-    | NoOp
-
-
-
 -- MODEL
 
 
 type alias Model =
     { theme : String
+    , page : Page
     , key : Nav.Key
     , url : Url.Url
-
-    -- Proof of Relationship
-    , applicantsLastName : String
-    , applicantsFirstName : String
-    , sponsorsFullName : String
-    , documentsName : String
     }
 
 
-type alias MenuOptionDetails =
-    { title : String
-    , description : String
-    , msg : Msg
-    }
+type Page
+    = HomePage Home.Model
+    | ProofOfRelationshipPage ProofOfRelationship.Model
+    | ProofOfContactPage ProofOfContact.Model
+    | NotFoundPage
+
+
+type Route
+    = Home
+    | ProofOfRelationship
+    | ProofOfContact
 
 
 
@@ -104,16 +64,25 @@ main =
 
 init : () -> Url -> Nav.Key -> ( Model, Cmd Msg )
 init _ url key =
-    ( { theme = "light"
-      , key = key
-      , url = url
-      , applicantsLastName = ""
-      , applicantsFirstName = ""
-      , sponsorsFullName = ""
-      , documentsName = ""
-      }
-    , Cmd.none
-    )
+    updateUrl url
+        { theme = "light"
+        , page = NotFoundPage
+        , key = key
+        , url = url
+        }
+
+
+
+-- MESSAGES
+
+
+type Msg
+    = ChangeTheme String
+    | UrlChanged Url.Url
+    | LinkClicked Browser.UrlRequest
+    | GotHomeMsg Home.Msg
+    | GotProofOfRelationshipMsg ProofOfRelationship.Msg
+    | GotProofOfContactMsg ProofOfContact.Msg
 
 
 
@@ -128,11 +97,6 @@ update msg model =
             , changeTheme string
             )
 
-        UrlChanged url ->
-            ( { model | url = url }
-            , Cmd.none
-            )
-
         LinkClicked urlRequest ->
             case urlRequest of
                 Browser.Internal url ->
@@ -141,22 +105,62 @@ update msg model =
                 Browser.External href ->
                     ( model, Nav.load href )
 
-        MenuOptionProofOfRelationshipClicked ->
-            ( model, Nav.pushUrl model.key "/proof-of-relationship" )
+        UrlChanged url ->
+            updateUrl url model
 
-        MenuOptionProofOfContactClicked ->
-            ( model, Nav.pushUrl model.key "/proof-of-contact" )
+        GotHomeMsg homeMsg ->
+            case model.page of
+                HomePage homeModel ->
+                    Home.update homeMsg homeModel
+                        |> toHome model
 
-        NoOp ->
-            ( model, Cmd.none )
+                _ ->
+                    ( model, Cmd.none )
+
+        GotProofOfRelationshipMsg proofOfRelationshipMsg ->
+            case model.page of
+                ProofOfRelationshipPage proofOfRelationshipModel ->
+                    ProofOfRelationship.update proofOfRelationshipMsg proofOfRelationshipModel
+                        |> toProofOfRelationship model
+
+                _ ->
+                    ( model, Cmd.none )
+
+        GotProofOfContactMsg proofOfContactMsg ->
+            case model.page of
+                ProofOfContactPage proofOfContactModel ->
+                    ProofOfContact.update proofOfContactMsg proofOfContactModel
+                        |> toProofOfContact model
+
+                _ ->
+                    ( model, Cmd.none )
 
 
 
 -- VIEW
 
 
-view : Model -> Browser.Document Msg
+view : Model -> Document Msg
 view model =
+    let
+        content : Html Msg
+        content =
+            case model.page of
+                HomePage homeModel ->
+                    Home.view homeModel
+                        |> Html.map GotHomeMsg
+
+                ProofOfRelationshipPage proofOfRelationshipModel ->
+                    ProofOfRelationship.view proofOfRelationshipModel
+                        |> Html.map GotProofOfRelationshipMsg
+
+                ProofOfContactPage proofOfContactModel ->
+                    ProofOfContact.view proofOfContactModel
+                        |> Html.map GotProofOfContactMsg
+
+                NotFoundPage ->
+                    div [] [ text "Not found" ]
+    in
     { title = "19tools"
     , body =
         [ div
@@ -164,15 +168,8 @@ view model =
             , Attr.class "flex flex-col justify-center items-start min-w-full min-h-full"
             ]
             [ header_
-            , case model.url.path of
-                "/proof-of-relationship" ->
-                    proofOfRelationship model
-
-                "/proof-of-contact" ->
-                    proofOfContact model
-
-                _ ->
-                    home model
+            , content
+            , footer
             ]
         ]
     }
@@ -183,155 +180,9 @@ header_ =
     header [ Attr.class "text-lg p-4" ] [ a [ href "/" ] [ text "19tools" ] ]
 
 
-
--- VIEW: Home
-
-
-home : Model -> Html Msg
-home _ =
-    div
-        [ Attr.class "container mx-auto flex flex-col gap-4 mt-8"
-        ]
-        [ menuOptionGroup
-            "Canadian Immigration Tools"
-            [ MenuOptionDetails "Proof of relationship" "Produce a document that helps prove your relationship to your sponsor." MenuOptionProofOfRelationshipClicked
-            , MenuOptionDetails "Proof of contact" "Produce a document that helps prove you have had contact with your sponsor." MenuOptionProofOfContactClicked
-            ]
-        ]
-
-
-menuOptionGroup : String -> List MenuOptionDetails -> Html Msg
-menuOptionGroup title menuOptionDetails =
-    div
-        [ Attr.class "flex flex-col gap-2"
-        ]
-        [ h1 [ Attr.class "text-2xl font-bold" ] [ text title ]
-        , div [ Attr.class "flex flex-col gap-2" ] (List.map menuOption menuOptionDetails)
-        ]
-
-
-menuOption : MenuOptionDetails -> Html Msg
-menuOption menuOptionDetails =
-    button
-        [ Attr.class "flex flex-col border border-slate-200 rounded-md p-4 hover:bg-slate-100"
-        , onClick menuOptionDetails.msg
-        ]
-        [ div [ Attr.class "text-xl font-bold" ] [ text menuOptionDetails.title ]
-        , div [] [ text menuOptionDetails.description ]
-        ]
-
-
-
--- VIEW: Proof of Relationship
-
-
-proofOfRelationship : Model -> Html Msg
-proofOfRelationship model =
-    div
-        [ Attr.class "container mx-auto flex flex-col gap-4 mt-8"
-        ]
-        [ h1
-            [ Attr.class "text-2xl font-bold" ]
-            [ text "Proof of relationship" ]
-        , div
-            [ Attr.class "flex flex-col items-center" ]
-            [ text "Proof of relationship"
-            , case model.url.path of
-                "/proof-of-relationship" ->
-                    proofOfRelationshipHome model
-
-                "/proof-of-relationship/collect-details" ->
-                    proofOfRelationshipCollectDetails model
-
-                _ ->
-                    proofOfRelationshipHome model
-            ]
-        ]
-
-
-proofOfRelationshipHome : Model -> Html Msg
-proofOfRelationshipHome _ =
-    div
-        [ Attr.class "flex flex-col gap-2" ]
-        [ h1 [] [ text "Overview" ]
-        , p [] [ text "You’ll be led through the following steps to produce a document to help prove your relationship:" ]
-        , ol
-            [ Attr.class "flex flex-col gap-2" ]
-            [ li [] [ text "Type in your and your sponsor’s details." ]
-            , li [] [ text "Upload pictures and their descriptions." ]
-            , li [] [ text "Make your payment." ]
-            , li [] [ text "Download one or more documents." ]
-            ]
-        , button [ onClick ProofOfRelationshipCollectDetailsHomeNextClicked ] [ text "Next" ]
-        ]
-
-
-proofOfRelationshipCollectDetails : Model -> Html Msg
-proofOfRelationshipCollectDetails model =
-    div
-        [ Attr.class "flex flex-col gap-2" ]
-        [ h1 [] [ text "Collect details" ]
-        , div
-            []
-            [ label [] [ text "The applicant's last name" ]
-            , input [ type_ "text", placeholder "The applicant's last name", value model.applicantsLastName, onInput ProofOfRelationshipCollectDetailsApplicantsLastNameInputted ] []
-            ]
-        , div
-            []
-            [ label [] [ text "The applicant's first name" ]
-            , input [ type_ "text", placeholder "The applicant's first name", value model.applicantsFirstName, onInput ProofOfRelationshipCollectDetailsApplicantsFirstNameInputted ] []
-            ]
-        , div
-            []
-            [ label [] [ text "The sponsor's full name" ]
-            , input [ type_ "text", placeholder "The sponsor's full name", value model.sponsorsFullName, onInput ProofOfRelationshipCollectDetailsSponsorsNameInputted ] []
-            ]
-        , div
-            []
-            [ label [] [ text "The document's name" ]
-            , input [ type_ "text", placeholder "The document's name", value model.documentsName, onInput ProofOfRelationshipCollectDetailsDocumentNameInputted ] []
-            ]
-        , div
-            []
-            [ button [ onClick ProofOfRelationshipCollectDetailsPreviousClicked ] [ text "Previous" ]
-            , button [ onClick ProofOfRelationshipCollectDetailsNextClicked ] [ text "Next" ]
-            ]
-        ]
-
-
-proofOfRelationshipUploadPictures : Model -> Html Msg
-proofOfRelationshipUploadPictures model =
-    div
-        [ Attr.class "flex flex-col gap-2" ]
-        [ h1 [] [ text "Upload pictures" ]
-        , div
-            [ on "dragover" proofOfRelationshipUploadPicturesPicturesDragOverDecoder
-            , on "drop" proofOfRelationshipUploadPicturesPicturesDroppedDecoder
-            ]
-            [ div [ Attr.class "text-gray-100", disabled True ] [ text "Drag and drop pictures here" ]
-            , button [ onClick ProofOfRelationshipUploadPicturesAddPicturesClicked ] [ text "Add pictures" ]
-            ]
-        , div []
-            [ button [ onClick ProofOfRelationshipUploadPicturesPreviousClicked ] [ text "Previous" ]
-            , button [ onClick ProofOfRelationshipUploadPicturesNextClicked ] [ text "Next" ]
-            ]
-        ]
-
-
-
--- VIEW: Proof of Contact
-
-
-proofOfContact : Model -> Html Msg
-proofOfContact _ =
-    div
-        [ Attr.class "container mx-auto flex flex-col gap-4 mt-8"
-        ]
-        [ h1 [ Attr.class "text-2xl font-bold" ] [ text "Proof of contact" ]
-        , div [ Attr.class "flex flex-col gap-2" ]
-            [ text "Proof of contact"
-            ]
-        ]
+footer : Html Msg
+footer =
+    div [ Attr.class "flex items-center text-sm p-4" ] [ text "© 2024 19tools" ]
 
 
 
@@ -352,13 +203,50 @@ port changeTheme : String -> Cmd msg
 
 
 
--- DECODERS
+-- HELPER FUNCTIONS
 
 
-proofOfRelationshipUploadPicturesPicturesDragOverDecoder : Decoder Msg
-proofOfRelationshipUploadPicturesPicturesDragOverDecoder =
-    Decode.succeed ProofOfRelationshipUploadPicturesPicturesDragOver
+urlParser : Url.Parser.Parser (Route -> a) a
+urlParser =
+    Url.Parser.oneOf
+        [ Url.Parser.map Home top
+        , Url.Parser.map ProofOfRelationship (s "proofofrelationship")
+        , Url.Parser.map ProofOfContact (s "proofofcontact")
+        ]
 
-proofOfRelationshipUploadPicturesPicturesDroppedDecoder : Decoder Msg
-proofOfRelationshipUploadPicturesPicturesDroppedDecoder =
-    Decode.succeed ProofOfRelationshipUploadPicturesPicturesDropped
+
+updateUrl : Url -> Model -> ( Model, Cmd Msg )
+updateUrl url model =
+    case Url.Parser.parse urlParser url of
+        Just Home ->
+            toHome model Home.init
+
+        Just ProofOfRelationship ->
+            toProofOfRelationship model ProofOfRelationship.init
+
+        Just ProofOfContact ->
+            toProofOfContact model ProofOfContact.init
+
+        Nothing ->
+            ( { model | page = NotFoundPage }, Cmd.none )
+
+
+toHome : Model -> ( Home.Model, Cmd Home.Msg ) -> ( Model, Cmd Msg )
+toHome model ( homeModel, homeCommand ) =
+    ( { model | page = HomePage homeModel }
+    , Cmd.map GotHomeMsg homeCommand
+    )
+
+
+toProofOfRelationship : Model -> ( ProofOfRelationship.Model, Cmd ProofOfRelationship.Msg ) -> ( Model, Cmd Msg )
+toProofOfRelationship model ( proofOfRelationshipModel, proofOfRelationshipCommand ) =
+    ( { model | page = ProofOfRelationshipPage proofOfRelationshipModel }
+    , Cmd.map GotProofOfRelationshipMsg proofOfRelationshipCommand
+    )
+
+
+toProofOfContact : Model -> ( ProofOfContact.Model, Cmd ProofOfContact.Msg ) -> ( Model, Cmd Msg )
+toProofOfContact model ( proofOfContactModel, proofofcontactCommand ) =
+    ( { model | page = ProofOfContactPage proofOfContactModel }
+    , Cmd.map GotProofOfContactMsg proofofcontactCommand
+    )
