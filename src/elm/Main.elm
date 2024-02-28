@@ -16,7 +16,7 @@ import Html.Attributes as Attr exposing (href)
 import ProofOfContact
 import ProofOfRelationship
 import Url exposing (Url)
-import Url.Parser exposing (s, top)
+import Url.Parser exposing ((</>), s, string, top)
 
 
 
@@ -43,7 +43,7 @@ type Page
 type Route
     = Home
     | ProofOfRelationship
-    | ProofOfContact
+    | ProofOfContact String
 
 
 
@@ -81,7 +81,7 @@ type Msg
     | UrlChanged Url.Url
     | LinkClicked Browser.UrlRequest
     | GotHomeMsg Home.Msg
-    | GotProofOfRelationshipMsg ProofOfRelationship.Msg
+    | GotProofOfRelationshipHomeMsg ProofOfRelationship.Msg
     | GotProofOfContactMsg ProofOfContact.Msg
 
 
@@ -117,10 +117,10 @@ update msg model =
                 _ ->
                     ( model, Cmd.none )
 
-        GotProofOfRelationshipMsg proofOfRelationshipMsg ->
+        GotProofOfRelationshipHomeMsg proofOfRelationshipHomeMsg ->
             case model.page of
-                ProofOfRelationshipPage proofOfRelationshipModel ->
-                    ProofOfRelationship.update proofOfRelationshipMsg proofOfRelationshipModel
+                ProofOfRelationshipPage proofOfRelationshipHomeModel ->
+                    ProofOfRelationship.update proofOfRelationshipHomeMsg proofOfRelationshipHomeModel
                         |> toProofOfRelationship model
 
                 _ ->
@@ -150,9 +150,9 @@ view model =
                     Home.view homeModel
                         |> Html.map GotHomeMsg
 
-                ProofOfRelationshipPage proofOfRelationshipModel ->
-                    ProofOfRelationship.view proofOfRelationshipModel
-                        |> Html.map GotProofOfRelationshipMsg
+                ProofOfRelationshipPage proofOfRelationshipHomeModel ->
+                    ProofOfRelationship.view proofOfRelationshipHomeModel
+                        |> Html.map GotProofOfRelationshipHomeMsg
 
                 ProofOfContactPage proofOfContactModel ->
                     ProofOfContact.view proofOfContactModel
@@ -211,7 +211,7 @@ urlParser =
     Url.Parser.oneOf
         [ Url.Parser.map Home top
         , Url.Parser.map ProofOfRelationship (s "proofofrelationship")
-        , Url.Parser.map ProofOfContact (s "proofofcontact")
+        , Url.Parser.map (ProofOfContact "") (s "canadianimmigration" </> s "proofofcontact")
         ]
 
 
@@ -222,9 +222,10 @@ updateUrl url model =
             toHome model Home.init
 
         Just ProofOfRelationship ->
-            toProofOfRelationship model ProofOfRelationship.init
+            ProofOfRelationship.init ProofOfRelationship.initialModel
+                |> toProofOfRelationship model
 
-        Just ProofOfContact ->
+        Just (ProofOfContact _) ->
             toProofOfContact model ProofOfContact.init
 
         Nothing ->
@@ -239,9 +240,9 @@ toHome model ( homeModel, homeCommand ) =
 
 
 toProofOfRelationship : Model -> ( ProofOfRelationship.Model, Cmd ProofOfRelationship.Msg ) -> ( Model, Cmd Msg )
-toProofOfRelationship model ( proofOfRelationshipModel, proofOfRelationshipCommand ) =
-    ( { model | page = ProofOfRelationshipPage proofOfRelationshipModel }
-    , Cmd.map GotProofOfRelationshipMsg proofOfRelationshipCommand
+toProofOfRelationship model ( proofOfRelationshipHomeModel, proofOfRelationshipHomeCommand ) =
+    ( { model | page = ProofOfRelationshipPage proofOfRelationshipHomeModel }
+    , Cmd.map GotProofOfRelationshipHomeMsg proofOfRelationshipHomeCommand
     )
 
 

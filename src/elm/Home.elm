@@ -1,8 +1,8 @@
 module Home exposing (..)
 
-import Html exposing (Html, button, div, h1, text)
-import Html.Attributes as Attr
-import Html.Events exposing (onClick)
+import Endpoint exposing (..)
+import Html exposing (Html, a, div, h1, text)
+import Html.Attributes as Attr exposing (href)
 
 
 
@@ -16,7 +16,7 @@ type alias Model =
 type alias MenuOptionDetails =
     { title : String
     , description : String
-    , msg : Msg
+    , endpoint : Endpoint
     }
 
 
@@ -61,8 +61,8 @@ view _ =
         ]
         [ menuOptionGroup
             "Canadian Immigration Tools"
-            [ MenuOptionDetails "Proof of relationship" "Produce a document that helps prove your relationship to your sponsor." MenuOptionProofOfRelationshipClicked
-            , MenuOptionDetails "Proof of contact" "Produce a document that helps prove you have had contact with your sponsor." MenuOptionProofOfContactClicked
+            [ MenuOptionDetails "Proof of relationship" "Produce a document that helps prove your relationship to your sponsor." Endpoint.proofOfRelationshipHome
+            , MenuOptionDetails "Proof of contact" "Produce a document that helps prove you have had contact with your sponsor." Endpoint.proofOfContact
             ]
         ]
 
@@ -79,9 +79,9 @@ menuOptionGroup title menuOptionDetails =
 
 menuOption : MenuOptionDetails -> Html Msg
 menuOption menuOptionDetails =
-    button
+    Html.a
         [ Attr.class "flex flex-col border border-slate-200 rounded-md p-4 hover:bg-slate-100"
-        , onClick menuOptionDetails.msg
+        , href (Endpoint.unwrap menuOptionDetails.endpoint)
         ]
         [ div [ Attr.class "text-xl font-bold" ] [ text menuOptionDetails.title ]
         , div [] [ text menuOptionDetails.description ]
