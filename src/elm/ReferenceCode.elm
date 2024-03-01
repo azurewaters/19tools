@@ -209,3 +209,4 @@ updateUrl url model =
 
         Nothing ->
             ( { model | page = NotFound }, Cmd.none )
+

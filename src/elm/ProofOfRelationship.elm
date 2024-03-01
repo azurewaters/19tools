@@ -1,36 +1,35 @@
 module ProofOfRelationship exposing (Model, Msg, init, initialModel, update, view)
 
 import File exposing (File)
-import Html exposing (Html, button, div, h1, input, label, li, ol, p, text)
+import File.Select
+import Html exposing (Html, button, div, h1, input, label, p, text)
 import Html.Attributes as Attr exposing (disabled, placeholder, type_, value)
-import Html.Events exposing (on, onClick, onInput)
-import Json.Decode as Decode exposing (Decoder)
+import Html.Events exposing (onClick, onInput, preventDefaultOn)
+import Json.Decode as Decode
+import Task
 
 
-type alias UploadedPictureAndItsDescription =
-    { id : String
+type alias PictureAndItsDescription =
+    { id : Int
     , position : Int
     , picture : File
+    , pictureInUrlFormat : String
     , description : String
     }
 
 
 type alias Model =
-    { applicantsLastName : String
-    , applicantsFirstName : String
-    , sponsorsFullName : String
+    { lastIdUsed : Int
+    , picturesAndTheirDescriptions : List PictureAndItsDescription
     , documentsName : String
-    , proofOfRelationshipUploadedPicturesAndTheirDescriptions : List UploadedPictureAndItsDescription
     }
 
 
 initialModel : Model
 initialModel =
-    { applicantsLastName = ""
-    , applicantsFirstName = ""
-    , sponsorsFullName = ""
+    { lastIdUsed = 0
+    , picturesAndTheirDescriptions = []
     , documentsName = ""
-    , proofOfRelationshipUploadedPicturesAndTheirDescriptions = []
     }
 
 
@@ -52,17 +51,18 @@ init model =
 type Msg
     = HomeNextClicked
       -- Collect Details
-    | ApplicantsLastNameInputted String
-    | ApplicantsFirstNameInputted String
-    | SponsorsNameInputted String
     | DocumentNameInputted String
       -- Upload Pictures
-    | PicturesDragOver
-    | PicturesDropped
+    | PicturesDropped (List File)
+    | PicturesSelected File (List File)
     | AddPicturesClicked
-    | PreviousClicked
+    | GotPictureInUrlFormat Int (Result String String)
+    | PicturesDescriptionInputted Int String
+    | DeletePictureClicked Int
       -- Download Documents
     | DownloadDocumentsClicked
+      -- Other
+    | NoOp
 
 
 
@@ -77,33 +77,100 @@ update msg model =
             ( model, Cmd.none )
 
         --  Collect Details
-        ApplicantsLastNameInputted applicantsLastName ->
-            ( { model | applicantsLastName = applicantsLastName }, Cmd.none )
-
-        ApplicantsFirstNameInputted applicantsFirstName ->
-            ( { model | applicantsFirstName = applicantsFirstName }, Cmd.none )
-
-        SponsorsNameInputted sponsorsFullName ->
-            ( { model | sponsorsFullName = sponsorsFullName }, Cmd.none )
-
         DocumentNameInputted documentsName ->
             ( { model | documentsName = documentsName }, Cmd.none )
 
         -- Upload Pictures
-        PicturesDragOver ->
-            ( model, Cmd.none )
+        PicturesDropped files ->
+            let
+                -- Filter out the files that are already uploaded
+                -- Make a PictureAndItsDescription for each file with its id set to the next id
+                newPicturesAndTheirDescriptions =
+                    files
+                        |> getOnlyNewFiles model.picturesAndTheirDescriptions
+                        |> makePicturesAndTheirDescriptions model.lastIdUsed
+            in
+            ( { model
+                | lastIdUsed = model.lastIdUsed + List.length newPicturesAndTheirDescriptions
+                , picturesAndTheirDescriptions = model.picturesAndTheirDescriptions ++ newPicturesAndTheirDescriptions
+              }
+            , Cmd.batch (getPicturesInUrlFormatCmds newPicturesAndTheirDescriptions)
+            )
 
-        PicturesDropped ->
-            ( model, Cmd.none )
+        PicturesSelected file files ->
+            let
+                newPicturesAndTheirDescriptions =
+                    (file :: files)
+                        |> getOnlyNewFiles model.picturesAndTheirDescriptions
+                        |> makePicturesAndTheirDescriptions model.lastIdUsed
+            in
+            ( { model
+                | lastIdUsed = model.lastIdUsed + List.length newPicturesAndTheirDescriptions
+                , picturesAndTheirDescriptions = model.picturesAndTheirDescriptions ++ newPicturesAndTheirDescriptions
+              }
+            , Cmd.batch (getPicturesInUrlFormatCmds newPicturesAndTheirDescriptions)
+            )
 
         AddPicturesClicked ->
-            ( model, Cmd.none )
+            ( model, File.Select.files [ "image/png", "image/jpg", "image/jpeg" ] PicturesSelected )
 
-        PreviousClicked ->
-            ( model, Cmd.none )
+        GotPictureInUrlFormat id result ->
+            case result of
+                Ok pictureInUrlFormat ->
+                    let
+                        updatedPicturesAndTheirDescriptions : List PictureAndItsDescription
+                        updatedPicturesAndTheirDescriptions =
+                            List.map
+                                (\pictureAndItsDescription ->
+                                    if pictureAndItsDescription.id == id then
+                                        { pictureAndItsDescription | pictureInUrlFormat = pictureInUrlFormat }
+
+                                    else
+                                        pictureAndItsDescription
+                                )
+                                model.picturesAndTheirDescriptions
+                    in
+                    ( { model | picturesAndTheirDescriptions = updatedPicturesAndTheirDescriptions }
+                    , Cmd.none
+                    )
+
+                Err _ ->
+                    ( model, Cmd.none )
+
+        PicturesDescriptionInputted id description ->
+            ( { model
+                | picturesAndTheirDescriptions =
+                    List.map
+                        (\pictureAndItsDescription ->
+                            if pictureAndItsDescription.id == id then
+                                { pictureAndItsDescription | description = description }
+
+                            else
+                                pictureAndItsDescription
+                        )
+                        model.picturesAndTheirDescriptions
+              }
+            , Cmd.none
+            )
+
+        DeletePictureClicked id ->
+            ( { model
+                | picturesAndTheirDescriptions =
+                    List.filter
+                        (\pictureAndItsDescription ->
+                            pictureAndItsDescription.id /= id
+                        )
+                        model.picturesAndTheirDescriptions
+              }
+            , Cmd.none
+            )
 
         -- Download Documents
         DownloadDocumentsClicked ->
+            ( model, Cmd.none )
+
+        -- Other
+        NoOp ->
             ( model, Cmd.none )
 
 
@@ -120,84 +187,149 @@ view model =
             [ Attr.class "text-2xl font-bold" ]
             [ text "Proof of relationship" ]
         , div
-            [ Attr.class "flex flex-col items-center" ]
-            [ text "Proof of relationship"
+            [ Attr.class "flex flex-col gap-2" ]
+            [ p [] [ text "You’ll be led through the following steps to produce a document to help prove your relationship:" ]
+
+            -- Collect Details
             , div
                 [ Attr.class "flex flex-col gap-2" ]
-                [ h1 [] [ text "Overview" ]
-                , p [] [ text "You’ll be led through the following steps to produce a document to help prove your relationship:" ]
+                [ label [] [ text "The document's name" ]
+                , input [ type_ "text", placeholder "The document's name", value model.documentsName, onInput DocumentNameInputted ] []
+                ]
 
-                -- Collect Details
-                , div
-                    [ Attr.class "flex flex-col gap-2" ]
-                    [ h1 [] [ text "Collect details" ]
-                    , div
-                        []
-                        [ label [] [ text "The applicant's last name" ]
-                        , input [ type_ "text", placeholder "The applicant's last name", value model.applicantsLastName, onInput ApplicantsLastNameInputted ] []
-                        ]
-                    , div
-                        []
-                        [ label [] [ text "The applicant's first name" ]
-                        , input [ type_ "text", placeholder "The applicant's first name", value model.applicantsFirstName, onInput ApplicantsFirstNameInputted ] []
-                        ]
-                    , div
-                        []
-                        [ label [] [ text "The sponsor's full name" ]
-                        , input [ type_ "text", placeholder "The sponsor's full name", value model.sponsorsFullName, onInput SponsorsNameInputted ] []
-                        ]
-                    , div
-                        []
-                        [ label [] [ text "The document's name" ]
-                        , input [ type_ "text", placeholder "The document's name", value model.documentsName, onInput DocumentNameInputted ] []
-                        ]
-                    ]
+            -- Upload Pictures
+            , div
+                [ Attr.class "flex flex-col gap-2" ]
+                [ h1 [] [ text "Pictures" ]
+                , case model.picturesAndTheirDescriptions of
+                    [] ->
+                        dropZone
 
-                -- Upload Pictures
-                , div
-                    [ Attr.class "flex flex-col gap-2" ]
-                    [ h1 [] [ text "Upload pictures" ]
-                    , div
-                        [ on "dragover" picturesDragOverDecoder
-                        , on "drop" picturesDroppedDecoder
-                        ]
-                        [ div [ Attr.class "text-gray-100", disabled True ] [ text "Drag and drop pictures here" ]
-                        , button [ onClick AddPicturesClicked ] [ text "Add pictures" ]
-                        ]
-                    ]
+                    _ ->
+                        picturesList model.picturesAndTheirDescriptions
                 ]
             ]
         ]
 
 
+picturesList : List PictureAndItsDescription -> Html Msg
+picturesList picturesAndTheirDescriptions =
+    div
+        [ Attr.class "p-8 border border-grey-300 rounded flex gap-8 flex-wrap mx-auto"
+        , onFilesDrop PicturesDropped
+        , onDragOver NoOp
+        ]
+        (List.map picture picturesAndTheirDescriptions)
 
--- uploadPictures : Model -> Html Msg
--- uploadPictures model =
--- payment : Model -> Html Msg
--- payment _ =
---     div
---         [ Attr.class "flex flex-col gap-2" ]
---         [ h1 [] [ text "Payment" ]
---         , p [] [ text "You will be charged $10.00 for this service." ]
---         , button [ onClick PaymentPreviousClicked ] [ text "Previous" ]
---         , button [ onClick PaymentNextClicked ] [ text "Next" ]
---         ]
--- downloadDocuments : Model -> Html Msg
--- downloadDocuments _ =
---     div
---         [ Attr.class "flex flex-col gap-2" ]
---         [ h1 [] [ text "Download documents" ]
---         , p [] [ text "You can download the document you created." ]
---         , button [ onClick DownloadDocumentsHomeClicked ] [ text "Home" ]
---         ]
+
+dropZone : Html Msg
+dropZone =
+    div
+        [ Attr.class "flex flex-col gap-8 items-center justify-center p-8 w-full border-2 border-gray-100 hover:border-gray-200 hover:bg-gray-50 rounded"
+        , onFilesDrop PicturesDropped
+        , onDragOver NoOp
+        ]
+        [ div [ Attr.class "text-gray-300", disabled True ] [ text "Drag and drop pictures here" ]
+        , button
+            [ onClick AddPicturesClicked
+            , Attr.class "bg-gray-900 border border-gray-900 rounded text-gray-200 hover:text-gray-100 text-sm font-semibold hover:bg-black px-4 py-2"
+            ]
+            [ text "Add pictures" ]
+        ]
+
+
+picture : PictureAndItsDescription -> Html Msg
+picture pictureAndItsDescription =
+    div
+        [ Attr.class "flex flex-col gap-2" ]
+        [ div
+            [ Attr.class "relative bg-no-repeat bg-contain bg-center h-64 w-full"
+            , Attr.style "background-image" ("url('" ++ pictureAndItsDescription.pictureInUrlFormat ++ "')")
+            ]
+            [ div
+                [ Attr.class "absolute right-2 top-2 rounded-full bg-gray-100 border border-gray-200 p-2 hover:bg-gray-200"
+                , onClick (DeletePictureClicked pictureAndItsDescription.id)
+                ]
+                [ text "x" ]
+            ]
+        , input
+            [ type_ "text"
+            , placeholder "Description"
+            , value pictureAndItsDescription.description
+            , onInput (PicturesDescriptionInputted pictureAndItsDescription.id)
+            , Attr.class "rounded placeholder:text-gray-300"
+            ]
+            []
+        ]
+
+
+
+-- EVENTS
+
+
+onDragOver : Msg -> Html.Attribute Msg
+onDragOver msg =
+    preventDefaultOn "dragover" (Decode.succeed ( msg, True ))
+
+
+onFilesDrop : (List File -> Msg) -> Html.Attribute Msg
+onFilesDrop msg =
+    preventDefaultOn "drop" (Decode.map2 Tuple.pair (Decode.map msg filesDecoder) (Decode.succeed True))
+
+
+
 -- DECODERS
 
 
-picturesDragOverDecoder : Decoder Msg
-picturesDragOverDecoder =
-    Decode.succeed PicturesDragOver
+filesDecoder : Decode.Decoder (List File)
+filesDecoder =
+    Decode.at [ "dataTransfer", "files" ] (Decode.list File.decoder)
 
 
-picturesDroppedDecoder : Decoder Msg
-picturesDroppedDecoder =
-    Decode.succeed PicturesDropped
+
+-- OTHER HELPER FUNCTIONS
+
+
+getPictureInUrlFormat : Int -> File -> Cmd Msg
+getPictureInUrlFormat id file =
+    Task.attempt (GotPictureInUrlFormat id) (File.toUrl file)
+
+
+getOnlyNewFiles : List PictureAndItsDescription -> List File -> List File
+getOnlyNewFiles picturesAndTheirDescriptions files =
+    List.filter
+        (\file ->
+            List.all
+                (\pictureAndItsDescription ->
+                    File.name pictureAndItsDescription.picture /= File.name file
+                )
+                picturesAndTheirDescriptions
+        )
+        files
+
+
+makePicturesAndTheirDescriptions : Int -> List File -> List PictureAndItsDescription
+makePicturesAndTheirDescriptions lastIdUsed files =
+    List.indexedMap
+        (\index file ->
+            let
+                newId =
+                    lastIdUsed + index + 1
+            in
+            { id = newId
+            , position = newId
+            , picture = file
+            , pictureInUrlFormat = ""
+            , description = ""
+            }
+        )
+        files
+
+
+getPicturesInUrlFormatCmds : List PictureAndItsDescription -> List (Cmd Msg)
+getPicturesInUrlFormatCmds picturesAndTheirDescriptions =
+    List.map
+        (\pictureAndItsDescription ->
+            getPictureInUrlFormat pictureAndItsDescription.id pictureAndItsDescription.picture
+        )
+        picturesAndTheirDescriptions
