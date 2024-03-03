@@ -10,3 +10,10 @@ const app = Elm.Main.init({
 app.ports.changeTheme.subscribe(function (data) {
   window.document.documentElement.setAttribute('data-theme', data)
 })
+
+// Here's where we subscribe to the renderThePDF port
+app.ports.renderThePDF.subscribe(function (data) {
+  // This is where we would use the data to render the PDF
+  console.log(data)
+  window.alert('This is where we would render the PDF')
+})

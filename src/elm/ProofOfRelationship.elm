@@ -1,4 +1,4 @@
-module ProofOfRelationship exposing (Model, Msg, init, initialModel, update, view)
+port module ProofOfRelationship exposing (Model, Msg, init, initialModel, update, view)
 
 import File exposing (File)
 import File.Select
@@ -6,6 +6,7 @@ import Html exposing (Html, button, div, h1, input, label, p, text)
 import Html.Attributes as Attr exposing (disabled, placeholder, type_, value)
 import Html.Events exposing (onClick, onInput, preventDefaultOn)
 import Json.Decode as Decode
+import Json.Encode as Encode
 import Task
 
 
@@ -16,6 +17,10 @@ type alias PictureAndItsDescription =
     , pictureInUrlFormat : String
     , description : String
     }
+
+
+
+-- MODEL
 
 
 type alias Model =
@@ -167,11 +172,42 @@ update msg model =
 
         -- Download Documents
         DownloadDocumentsClicked ->
-            ( model, Cmd.none )
+            -- This is where we send the pictures and their descriptions out the port to be rendered into a PDF
+            let
+                -- We are going to build an encoded DetailsForPDFRednering object
+                -- First, we'll encode each of the picturesAndTheirDescriptions into a list of encodedPictureAndItsDescription
+                -- Next, we'll encode the documentsName and the list of encodedPictureAndItsDescription into a DetailsForPDFRednering
+                -- All this is put together into an enocodedDetailsForPDFRendering variable
+                encodedPicturesAndTheirDescriptions =
+                    List.map
+                        (\pictureAndItsDescription ->
+                            Encode.object
+                                [ ( "id", Encode.int pictureAndItsDescription.id )
+                                , ( "position", Encode.int pictureAndItsDescription.position )
+                                , ( "pictureInUrlFormat", Encode.string pictureAndItsDescription.pictureInUrlFormat )
+                                , ( "description", Encode.string pictureAndItsDescription.description )
+                                ]
+                        )
+                        model.picturesAndTheirDescriptions
+
+                encodedDetailsForRendering =
+                    Encode.object
+                        [ ( "documentsName", Encode.string model.documentsName )
+                        , ( "picturesAndTheirDescriptions", Encode.list identity encodedPicturesAndTheirDescriptions )
+                        ]
+            in
+            ( model, renderThePDF encodedDetailsForRendering )
 
         -- Other
         NoOp ->
             ( model, Cmd.none )
+
+
+
+-- PORTS
+
+
+port renderThePDF : Encode.Value -> Cmd msg
 
 
 
@@ -208,6 +244,12 @@ view model =
                     _ ->
                         picturesList model.picturesAndTheirDescriptions
                 ]
+
+            -- Download Documents
+            , div
+                [ Attr.class "flex justify-end p-4" ]
+                [ button [ onClick DownloadDocumentsClicked ] [ text "Download Documents" ]
+                ]
             ]
         ]
 
@@ -241,13 +283,13 @@ dropZone =
 picture : PictureAndItsDescription -> Html Msg
 picture pictureAndItsDescription =
     div
-        [ Attr.class "flex flex-col gap-2" ]
+        [ Attr.class "group flex flex-col gap-2" ]
         [ div
             [ Attr.class "relative bg-no-repeat bg-contain bg-center h-64 w-full"
             , Attr.style "background-image" ("url('" ++ pictureAndItsDescription.pictureInUrlFormat ++ "')")
             ]
             [ div
-                [ Attr.class "absolute right-2 top-2 rounded-full bg-gray-100 border border-gray-200 p-2 hover:bg-gray-200"
+                [ Attr.class "invisible group-hover:visible absolute right-2 top-2 rounded-full bg-gray-100 border border-gray-200 p-2 hover:bg-gray-200"
                 , onClick (DeletePictureClicked pictureAndItsDescription.id)
                 ]
                 [ text "x" ]
@@ -257,7 +299,7 @@ picture pictureAndItsDescription =
             , placeholder "Description"
             , value pictureAndItsDescription.description
             , onInput (PicturesDescriptionInputted pictureAndItsDescription.id)
-            , Attr.class "rounded placeholder:text-gray-300"
+            , Attr.class "group-focus:border group-focus:border-gray-300 rounded placeholder:text-gray-300"
             ]
             []
         ]
