@@ -19,8 +19,7 @@ app.ports.changeTheme.subscribe(function (data) {
 
 
 // Here's where we subscribe to the renderThePDF port
-app.ports.renderThePDF.subscribe(function (data) {
-  // This is where we render the PDF
-  alert(data)
-  pdfMake.createPdf(data).open()
+app.ports.renderThePDF.subscribe(function (documentDefinition: Object) {
+  // This is where we render the PDF and send it back to Elm as a data URL
+  pdfMake.createPdf(documentDefinition).download('xyz.pdf')
 })

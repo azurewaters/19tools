@@ -69,7 +69,6 @@ type Msg
     | DeletePictureClicked Int
       -- Download Documents
     | DownloadDocumentsClicked
-    | GotThePDF String
       -- Other
     | NoOp
 
@@ -176,14 +175,7 @@ update msg model =
 
         -- Download Documents
         DownloadDocumentsClicked ->
-            ( model, renderThePDF (getEncodedDocumentDefinition model.pictures) )
-
-        GotThePDF pdfInURLFormat ->
-            -- We just received the prepared PDF
-            -- Download it to the user's computer
-            ( { model | pdfInURLFormat = pdfInURLFormat }
-            , Download.string model.documentsName pdfInURLFormat "application/pdf"
-            )
+            ( model, renderThePDF <| getEncodedDocumentDefinition model.pictures )
 
         -- Other
         NoOp ->
@@ -296,14 +288,10 @@ picture pictureAndItsDescription =
 -- SUBSCRIPTIONS
 
 
-port receiveThePDF : (String -> msg) -> Sub msg
-
-
 subscriptions : Model -> Sub Msg
 subscriptions _ =
     Sub.batch
-        [ receiveThePDF GotThePDF
-        ]
+        []
 
 
 
@@ -387,6 +375,8 @@ getEncodedDocumentDefinition ps =
     -- This is where we combine the TitlePage and the PicturePages and put it together into an encoded object called "content" and send that out
     Encode.object
         [ ( "content", Encode.list identity (List.concat [ getEncodedTitlePage, getEncodedPicturePages ps ]) )
+        , ( "pageOrientation", Encode.string "landscape" )
+        , ( "pageSize", Encode.string "A4" )
         ]
 
 
@@ -421,6 +411,9 @@ getEncodedPicture : String -> Encode.Value
 getEncodedPicture contentInURLFormat =
     Encode.object
         [ ( "image", Encode.string contentInURLFormat )
+        , ( "width", Encode.string "840" )
+        , ( "fit", Encode.list identity [ Encode.int 842, Encode.int 500 ] ) -- The height has been reduced to accommodate the description
+        , ( "alignment", Encode.string "center" )
         ]
 
 
@@ -428,6 +421,6 @@ getEncodedPictureDescription : String -> Encode.Value
 getEncodedPictureDescription description =
     Encode.object
         [ ( "text", Encode.string description )
-        , ( "fontSize", Encode.int 12 )
+        , ( "fontSize", Encode.int 10 )
         , ( "pageBreak", Encode.string "after" )
         ]
