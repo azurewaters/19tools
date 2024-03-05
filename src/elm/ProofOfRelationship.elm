@@ -1,6 +1,7 @@
-port module ProofOfRelationship exposing (Model, Msg, init, initialModel, update, view)
+port module ProofOfRelationship exposing (Model, Msg, init, initialModel, subscriptions, update, view)
 
 import File exposing (File)
+import File.Download as Download
 import File.Select
 import Html exposing (Html, button, div, h1, input, label, p, text)
 import Html.Attributes as Attr exposing (disabled, placeholder, type_, value)
@@ -10,11 +11,11 @@ import Json.Encode as Encode
 import Task
 
 
-type alias PictureAndItsDescription =
+type alias Picture =
     { id : Int
     , position : Int
     , picture : File
-    , pictureInUrlFormat : String
+    , contentInURLFormat : String
     , description : String
     }
 
@@ -25,16 +26,18 @@ type alias PictureAndItsDescription =
 
 type alias Model =
     { lastIdUsed : Int
-    , picturesAndTheirDescriptions : List PictureAndItsDescription
+    , pictures : List Picture
     , documentsName : String
+    , pdfInURLFormat : String
     }
 
 
 initialModel : Model
 initialModel =
     { lastIdUsed = 0
-    , picturesAndTheirDescriptions = []
+    , pictures = []
     , documentsName = ""
+    , pdfInURLFormat = ""
     }
 
 
@@ -66,6 +69,7 @@ type Msg
     | DeletePictureClicked Int
       -- Download Documents
     | DownloadDocumentsClicked
+    | GotThePDF String
       -- Other
     | NoOp
 
@@ -92,12 +96,12 @@ update msg model =
                 -- Make a PictureAndItsDescription for each file with its id set to the next id
                 newPicturesAndTheirDescriptions =
                     files
-                        |> getOnlyNewFiles model.picturesAndTheirDescriptions
+                        |> getOnlyNewFiles model.pictures
                         |> makePicturesAndTheirDescriptions model.lastIdUsed
             in
             ( { model
                 | lastIdUsed = model.lastIdUsed + List.length newPicturesAndTheirDescriptions
-                , picturesAndTheirDescriptions = model.picturesAndTheirDescriptions ++ newPicturesAndTheirDescriptions
+                , pictures = model.pictures ++ newPicturesAndTheirDescriptions
               }
             , Cmd.batch (getPicturesInUrlFormatCmds newPicturesAndTheirDescriptions)
             )
@@ -106,12 +110,12 @@ update msg model =
             let
                 newPicturesAndTheirDescriptions =
                     (file :: files)
-                        |> getOnlyNewFiles model.picturesAndTheirDescriptions
+                        |> getOnlyNewFiles model.pictures
                         |> makePicturesAndTheirDescriptions model.lastIdUsed
             in
             ( { model
                 | lastIdUsed = model.lastIdUsed + List.length newPicturesAndTheirDescriptions
-                , picturesAndTheirDescriptions = model.picturesAndTheirDescriptions ++ newPicturesAndTheirDescriptions
+                , pictures = model.pictures ++ newPicturesAndTheirDescriptions
               }
             , Cmd.batch (getPicturesInUrlFormatCmds newPicturesAndTheirDescriptions)
             )
@@ -123,19 +127,19 @@ update msg model =
             case result of
                 Ok pictureInUrlFormat ->
                     let
-                        updatedPicturesAndTheirDescriptions : List PictureAndItsDescription
+                        updatedPicturesAndTheirDescriptions : List Picture
                         updatedPicturesAndTheirDescriptions =
                             List.map
                                 (\pictureAndItsDescription ->
                                     if pictureAndItsDescription.id == id then
-                                        { pictureAndItsDescription | pictureInUrlFormat = pictureInUrlFormat }
+                                        { pictureAndItsDescription | contentInURLFormat = pictureInUrlFormat }
 
                                     else
                                         pictureAndItsDescription
                                 )
-                                model.picturesAndTheirDescriptions
+                                model.pictures
                     in
-                    ( { model | picturesAndTheirDescriptions = updatedPicturesAndTheirDescriptions }
+                    ( { model | pictures = updatedPicturesAndTheirDescriptions }
                     , Cmd.none
                     )
 
@@ -144,7 +148,7 @@ update msg model =
 
         PicturesDescriptionInputted id description ->
             ( { model
-                | picturesAndTheirDescriptions =
+                | pictures =
                     List.map
                         (\pictureAndItsDescription ->
                             if pictureAndItsDescription.id == id then
@@ -153,50 +157,33 @@ update msg model =
                             else
                                 pictureAndItsDescription
                         )
-                        model.picturesAndTheirDescriptions
+                        model.pictures
               }
             , Cmd.none
             )
 
         DeletePictureClicked id ->
             ( { model
-                | picturesAndTheirDescriptions =
+                | pictures =
                     List.filter
                         (\pictureAndItsDescription ->
                             pictureAndItsDescription.id /= id
                         )
-                        model.picturesAndTheirDescriptions
+                        model.pictures
               }
             , Cmd.none
             )
 
         -- Download Documents
         DownloadDocumentsClicked ->
-            -- This is where we send the pictures and their descriptions out the port to be rendered into a PDF
-            let
-                -- We are going to build an encoded DetailsForPDFRednering object
-                -- First, we'll encode each of the picturesAndTheirDescriptions into a list of encodedPictureAndItsDescription
-                -- Next, we'll encode the documentsName and the list of encodedPictureAndItsDescription into a DetailsForPDFRednering
-                -- All this is put together into an enocodedDetailsForPDFRendering variable
-                encodedPicturesAndTheirDescriptions =
-                    List.map
-                        (\pictureAndItsDescription ->
-                            Encode.object
-                                [ ( "id", Encode.int pictureAndItsDescription.id )
-                                , ( "position", Encode.int pictureAndItsDescription.position )
-                                , ( "pictureInUrlFormat", Encode.string pictureAndItsDescription.pictureInUrlFormat )
-                                , ( "description", Encode.string pictureAndItsDescription.description )
-                                ]
-                        )
-                        model.picturesAndTheirDescriptions
+            ( model, renderThePDF (getEncodedDocumentDefinition model.pictures) )
 
-                encodedDetailsForRendering =
-                    Encode.object
-                        [ ( "documentsName", Encode.string model.documentsName )
-                        , ( "picturesAndTheirDescriptions", Encode.list identity encodedPicturesAndTheirDescriptions )
-                        ]
-            in
-            ( model, renderThePDF encodedDetailsForRendering )
+        GotThePDF pdfInURLFormat ->
+            -- We just received the prepared PDF
+            -- Download it to the user's computer
+            ( { model | pdfInURLFormat = pdfInURLFormat }
+            , Download.string model.documentsName pdfInURLFormat "application/pdf"
+            )
 
         -- Other
         NoOp ->
@@ -237,12 +224,12 @@ view model =
             , div
                 [ Attr.class "flex flex-col gap-2" ]
                 [ h1 [] [ text "Pictures" ]
-                , case model.picturesAndTheirDescriptions of
+                , case model.pictures of
                     [] ->
                         dropZone
 
                     _ ->
-                        picturesList model.picturesAndTheirDescriptions
+                        picturesList model.pictures
                 ]
 
             -- Download Documents
@@ -254,7 +241,7 @@ view model =
         ]
 
 
-picturesList : List PictureAndItsDescription -> Html Msg
+picturesList : List Picture -> Html Msg
 picturesList picturesAndTheirDescriptions =
     div
         [ Attr.class "p-8 border border-grey-300 rounded flex gap-8 flex-wrap mx-auto"
@@ -280,13 +267,13 @@ dropZone =
         ]
 
 
-picture : PictureAndItsDescription -> Html Msg
+picture : Picture -> Html Msg
 picture pictureAndItsDescription =
     div
         [ Attr.class "group flex flex-col gap-2" ]
         [ div
             [ Attr.class "relative bg-no-repeat bg-contain bg-center h-64 w-full"
-            , Attr.style "background-image" ("url('" ++ pictureAndItsDescription.pictureInUrlFormat ++ "')")
+            , Attr.style "background-image" ("url('" ++ pictureAndItsDescription.contentInURLFormat ++ "')")
             ]
             [ div
                 [ Attr.class "invisible group-hover:visible absolute right-2 top-2 rounded-full bg-gray-100 border border-gray-200 p-2 hover:bg-gray-200"
@@ -302,6 +289,20 @@ picture pictureAndItsDescription =
             , Attr.class "group-focus:border group-focus:border-gray-300 rounded placeholder:text-gray-300"
             ]
             []
+        ]
+
+
+
+-- SUBSCRIPTIONS
+
+
+port receiveThePDF : (String -> msg) -> Sub msg
+
+
+subscriptions : Model -> Sub Msg
+subscriptions _ =
+    Sub.batch
+        [ receiveThePDF GotThePDF
         ]
 
 
@@ -337,20 +338,20 @@ getPictureInUrlFormat id file =
     Task.attempt (GotPictureInUrlFormat id) (File.toUrl file)
 
 
-getOnlyNewFiles : List PictureAndItsDescription -> List File -> List File
+getOnlyNewFiles : List Picture -> List File -> List File
 getOnlyNewFiles picturesAndTheirDescriptions files =
     List.filter
         (\file ->
             List.all
-                (\pictureAndItsDescription ->
-                    File.name pictureAndItsDescription.picture /= File.name file
+                (\p ->
+                    File.name p.picture /= File.name file
                 )
                 picturesAndTheirDescriptions
         )
         files
 
 
-makePicturesAndTheirDescriptions : Int -> List File -> List PictureAndItsDescription
+makePicturesAndTheirDescriptions : Int -> List File -> List Picture
 makePicturesAndTheirDescriptions lastIdUsed files =
     List.indexedMap
         (\index file ->
@@ -361,17 +362,72 @@ makePicturesAndTheirDescriptions lastIdUsed files =
             { id = newId
             , position = newId
             , picture = file
-            , pictureInUrlFormat = ""
+            , contentInURLFormat = ""
             , description = ""
             }
         )
         files
 
 
-getPicturesInUrlFormatCmds : List PictureAndItsDescription -> List (Cmd Msg)
-getPicturesInUrlFormatCmds picturesAndTheirDescriptions =
+getPicturesInUrlFormatCmds : List Picture -> List (Cmd Msg)
+getPicturesInUrlFormatCmds ps =
     List.map
-        (\pictureAndItsDescription ->
-            getPictureInUrlFormat pictureAndItsDescription.id pictureAndItsDescription.picture
+        (\p ->
+            getPictureInUrlFormat p.id p.picture
         )
-        picturesAndTheirDescriptions
+        ps
+
+
+
+-- PDF Document Description helpers
+
+
+getEncodedDocumentDefinition : List Picture -> Encode.Value
+getEncodedDocumentDefinition ps =
+    -- This is where we combine the TitlePage and the PicturePages and put it together into an encoded object called "content" and send that out
+    Encode.object
+        [ ( "content", Encode.list identity (List.concat [ getEncodedTitlePage, getEncodedPicturePages ps ]) )
+        ]
+
+
+getEncodedTitlePage : List Encode.Value
+getEncodedTitlePage =
+    [ Encode.object
+        [ ( "text", Encode.string "Proof of Relationship" )
+        , ( "fontSize", Encode.int 24 )
+        , ( "bold", Encode.bool True )
+        ]
+    , Encode.object
+        [ ( "text", Encode.string "This document contains pictures that establish my relationship with my sponsor." )
+        , ( "pageBreak", Encode.string "after" )
+        ]
+    ]
+
+
+getEncodedPicturePages : List Picture -> List Encode.Value
+getEncodedPicturePages ps =
+    List.map getEncodedPicturePage ps
+        |> List.concat
+
+
+getEncodedPicturePage : Picture -> List Encode.Value
+getEncodedPicturePage p =
+    [ getEncodedPicture p.contentInURLFormat
+    , getEncodedPictureDescription p.description
+    ]
+
+
+getEncodedPicture : String -> Encode.Value
+getEncodedPicture contentInURLFormat =
+    Encode.object
+        [ ( "image", Encode.string contentInURLFormat )
+        ]
+
+
+getEncodedPictureDescription : String -> Encode.Value
+getEncodedPictureDescription description =
+    Encode.object
+        [ ( "text", Encode.string description )
+        , ( "fontSize", Encode.int 12 )
+        , ( "pageBreak", Encode.string "after" )
+        ]

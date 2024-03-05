@@ -191,8 +191,17 @@ footer =
 
 
 subscriptions : Model -> Sub Msg
-subscriptions _ =
-    Sub.none
+subscriptions model =
+    case model.page of
+        ProofOfRelationshipPage proofOfRelationshipHomeModel ->
+            ProofOfRelationship.subscriptions proofOfRelationshipHomeModel
+                |> Sub.map GotProofOfRelationshipHomeMsg
+
+        NotFoundPage ->
+            Sub.none
+
+        _ ->
+            Sub.none
 
 
 
