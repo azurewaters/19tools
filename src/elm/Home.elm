@@ -1,7 +1,7 @@
 module Home exposing (..)
 
 import Endpoint exposing (..)
-import Html exposing (Html, a, div, h1, text)
+import Html exposing (Html, div, h1, text)
 import Html.Attributes as Attr exposing (href)
 
 

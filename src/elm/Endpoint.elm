@@ -1,6 +1,6 @@
 module Endpoint exposing (..)
 
-import Html exposing (Html, a, text)
+import Html exposing (Html, text)
 import Html.Attributes exposing (href)
 import Url.Builder exposing (QueryParameter)
 

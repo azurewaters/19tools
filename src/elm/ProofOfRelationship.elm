@@ -8,12 +8,12 @@ import Html.Attributes as Attr exposing (disabled, placeholder, type_, value)
 import Html.Events exposing (onClick, onInput, preventDefaultOn)
 import Json.Decode as Decode
 import Json.Encode as Encode
+import ProofOfContact exposing (Model)
 import Task
 
 
 type alias Picture =
-    { id : Int
-    , position : Int
+    { position : Int
     , picture : File
     , contentInURLFormat : String
     , description : String
@@ -25,19 +25,19 @@ type alias Picture =
 
 
 type alias Model =
-    { lastIdUsed : Int
-    , pictures : List Picture
+    { pictures : List Picture
     , documentsName : String
-    , pdfInURLFormat : String
+    , pictureBeingDragged : Maybe Picture
+    , pictureBeingDraggedOver : Maybe Picture
     }
 
 
 initialModel : Model
 initialModel =
-    { lastIdUsed = 0
-    , pictures = []
+    { pictures = []
     , documentsName = ""
-    , pdfInURLFormat = ""
+    , pictureBeingDragged = Nothing
+    , pictureBeingDraggedOver = Nothing
     }
 
 
@@ -64,9 +64,13 @@ type Msg
     | PicturesDropped (List File)
     | PicturesSelected File (List File)
     | AddPicturesClicked
-    | GotPictureInUrlFormat Int (Result String String)
-    | PicturesDescriptionInputted Int String
-    | DeletePictureClicked Int
+    | GotPictureInUrlFormat String (Result String String)
+    | PicturesDescriptionInputted String String
+    | DeletePictureClicked String
+    | PictureDragStarted Picture
+    | PictureDraggedOver Picture
+    | PictureDragEnded
+    | PictureDroppedOn Picture
       -- Download Documents
     | DownloadDocumentsClicked
       -- Other
@@ -96,11 +100,10 @@ update msg model =
                 newPicturesAndTheirDescriptions =
                     files
                         |> getOnlyNewFiles model.pictures
-                        |> makePicturesAndTheirDescriptions model.lastIdUsed
+                        |> makePictures (List.length model.pictures)
             in
             ( { model
-                | lastIdUsed = model.lastIdUsed + List.length newPicturesAndTheirDescriptions
-                , pictures = model.pictures ++ newPicturesAndTheirDescriptions
+                | pictures = model.pictures ++ newPicturesAndTheirDescriptions
               }
             , Cmd.batch (getPicturesInUrlFormatCmds newPicturesAndTheirDescriptions)
             )
@@ -110,11 +113,10 @@ update msg model =
                 newPicturesAndTheirDescriptions =
                     (file :: files)
                         |> getOnlyNewFiles model.pictures
-                        |> makePicturesAndTheirDescriptions model.lastIdUsed
+                        |> makePictures (List.length model.pictures)
             in
             ( { model
-                | lastIdUsed = model.lastIdUsed + List.length newPicturesAndTheirDescriptions
-                , pictures = model.pictures ++ newPicturesAndTheirDescriptions
+                | pictures = model.pictures ++ newPicturesAndTheirDescriptions
               }
             , Cmd.batch (getPicturesInUrlFormatCmds newPicturesAndTheirDescriptions)
             )
@@ -122,7 +124,7 @@ update msg model =
         AddPicturesClicked ->
             ( model, File.Select.files [ "image/png", "image/jpg", "image/jpeg" ] PicturesSelected )
 
-        GotPictureInUrlFormat id result ->
+        GotPictureInUrlFormat picturesName result ->
             case result of
                 Ok pictureInUrlFormat ->
                     let
@@ -130,7 +132,7 @@ update msg model =
                         updatedPicturesAndTheirDescriptions =
                             List.map
                                 (\pictureAndItsDescription ->
-                                    if pictureAndItsDescription.id == id then
+                                    if File.name pictureAndItsDescription.picture == picturesName then
                                         { pictureAndItsDescription | contentInURLFormat = pictureInUrlFormat }
 
                                     else
@@ -145,33 +147,63 @@ update msg model =
                 Err _ ->
                     ( model, Cmd.none )
 
-        PicturesDescriptionInputted id description ->
+        PicturesDescriptionInputted name description ->
             ( { model
                 | pictures =
                     List.map
-                        (\pictureAndItsDescription ->
-                            if pictureAndItsDescription.id == id then
-                                { pictureAndItsDescription | description = description }
+                        (\p ->
+                            if File.name p.picture == name then
+                                { p | description = description }
 
                             else
-                                pictureAndItsDescription
+                                p
                         )
                         model.pictures
               }
             , Cmd.none
             )
 
-        DeletePictureClicked id ->
+        DeletePictureClicked picturesName ->
             ( { model
                 | pictures =
                     List.filter
                         (\pictureAndItsDescription ->
-                            pictureAndItsDescription.id /= id
+                            File.name pictureAndItsDescription.picture /= picturesName
                         )
                         model.pictures
               }
             , Cmd.none
             )
+
+        PictureDragStarted pictureName ->
+            ( { model | pictureBeingDragged = Just pictureName }, Cmd.none )
+
+        PictureDraggedOver pictureName ->
+            ( { model | pictureBeingDraggedOver = Just pictureName }, Cmd.none )
+
+        PictureDragEnded ->
+            ( { model | pictureBeingDragged = Nothing, pictureBeingDraggedOver = Nothing }, Cmd.none )
+
+        PictureDroppedOn p ->
+            let
+                --  This is where we "move" the picture being dragged to the position of the picture it was dropped on
+                --  Remove the picture being dragged from the list
+                --  Break the list into two parts: the part before the picture being dropped on and the part after
+                --  Join the first part, the picture being dragged, and the second part together
+                updatedPictures =
+                    case model.pictureBeingDragged of
+                        Just pictureBeingDragged ->
+                            model.pictures
+                                |> List.filter (\pictureAndItsDescription -> pictureAndItsDescription /= pictureBeingDragged)
+                                |> List.sortBy .position
+                                |> List.partition (\currentPicture -> currentPicture.position < p.position)
+                                |> (\( before, after ) -> List.concat [ before, [ pictureBeingDragged ], after ])
+                                |> List.indexedMap (\index currentPicture -> { currentPicture | position = index })
+
+                        Nothing ->
+                            model.pictures
+            in
+            ( { model | pictures = updatedPictures, pictureBeingDragged = Nothing }, Cmd.none )
 
         -- Download Documents
         DownloadDocumentsClicked ->
@@ -218,33 +250,37 @@ view model =
                 [ h1 [] [ text "Pictures" ]
                 , case model.pictures of
                     [] ->
-                        dropZone
+                        viewDropZone
 
                     _ ->
-                        picturesList model.pictures
+                        viewPicturesList model
                 ]
 
             -- Download Documents
             , div
                 [ Attr.class "flex justify-end p-4" ]
-                [ button [ onClick DownloadDocumentsClicked ] [ text "Download Documents" ]
+                [ button
+                    [ onClick DownloadDocumentsClicked
+                    , buttonStyle
+                    ]
+                    [ text "Download Documents" ]
                 ]
             ]
         ]
 
 
-picturesList : List Picture -> Html Msg
-picturesList picturesAndTheirDescriptions =
+viewPicturesList : Model -> Html Msg
+viewPicturesList model =
     div
         [ Attr.class "p-8 border border-grey-300 rounded flex gap-8 flex-wrap mx-auto"
         , onFilesDrop PicturesDropped
         , onDragOver NoOp
         ]
-        (List.map picture picturesAndTheirDescriptions)
+        (List.map (viewPicture model) model.pictures)
 
 
-dropZone : Html Msg
-dropZone =
+viewDropZone : Html Msg
+viewDropZone =
     div
         [ Attr.class "flex flex-col gap-8 items-center justify-center p-8 w-full border-2 border-gray-100 hover:border-gray-200 hover:bg-gray-50 rounded"
         , onFilesDrop PicturesDropped
@@ -253,31 +289,60 @@ dropZone =
         [ div [ Attr.class "text-gray-300", disabled True ] [ text "Drag and drop pictures here" ]
         , button
             [ onClick AddPicturesClicked
-            , Attr.class "bg-gray-900 border border-gray-900 rounded text-gray-200 hover:text-gray-100 text-sm font-semibold hover:bg-black px-4 py-2"
+            , buttonStyle
             ]
             [ text "Add pictures" ]
         ]
 
 
-picture : Picture -> Html Msg
-picture pictureAndItsDescription =
+viewPicture : Model -> Picture -> Html Msg
+viewPicture model picture =
     div
-        [ Attr.class "group flex flex-col gap-2" ]
+        [ Attr.class "group flex flex-col gap-2"
+        , Attr.class
+            (case model.pictureBeingDragged of
+                Just p ->
+                    if p == picture then
+                        "opacity-50"
+
+                    else
+                        "opacity-100"
+
+                Nothing ->
+                    "opacity-100"
+            )
+        , Attr.class
+            (case model.pictureBeingDraggedOver of
+                Just p ->
+                    if p == picture then
+                        "border-dashed border-2 border-gray-200"
+
+                    else
+                        ""
+
+                Nothing ->
+                    ""
+            )
+        ]
         [ div
             [ Attr.class "relative bg-no-repeat bg-contain bg-center h-64 w-full"
-            , Attr.style "background-image" ("url('" ++ pictureAndItsDescription.contentInURLFormat ++ "')")
+            , Attr.style "background-image" ("url('" ++ picture.contentInURLFormat ++ "')")
+            , onDragStart (PictureDragStarted picture)
+            , onDragOver (PictureDraggedOver picture)
+            , onDrop (PictureDroppedOn picture)
+            , onDragEnd PictureDragEnded
             ]
             [ div
                 [ Attr.class "invisible group-hover:visible absolute right-2 top-2 rounded-full bg-gray-100 border border-gray-200 p-2 hover:bg-gray-200"
-                , onClick (DeletePictureClicked pictureAndItsDescription.id)
+                , onClick (DeletePictureClicked (File.name picture.picture))
                 ]
                 [ text "x" ]
             ]
         , input
             [ type_ "text"
             , placeholder "Description"
-            , value pictureAndItsDescription.description
-            , onInput (PicturesDescriptionInputted pictureAndItsDescription.id)
+            , value picture.description
+            , onInput (PicturesDescriptionInputted (File.name picture.picture))
             , Attr.class "group-focus:border group-focus:border-gray-300 rounded placeholder:text-gray-300"
             ]
             []
@@ -298,9 +363,24 @@ subscriptions _ =
 -- EVENTS
 
 
+onDragStart : Msg -> Html.Attribute Msg
+onDragStart msg =
+    preventDefaultOn "dragstart" (Decode.succeed ( msg, True ))
+
+
 onDragOver : Msg -> Html.Attribute Msg
 onDragOver msg =
     preventDefaultOn "dragover" (Decode.succeed ( msg, True ))
+
+
+onDragEnd : Msg -> Html.Attribute Msg
+onDragEnd msg =
+    preventDefaultOn "dragend" (Decode.succeed ( msg, True ))
+
+
+onDrop : Msg -> Html.Attribute Msg
+onDrop msg =
+    preventDefaultOn "drop" (Decode.succeed ( msg, True ))
 
 
 onFilesDrop : (List File -> Msg) -> Html.Attribute Msg
@@ -321,9 +401,9 @@ filesDecoder =
 -- OTHER HELPER FUNCTIONS
 
 
-getPictureInUrlFormat : Int -> File -> Cmd Msg
-getPictureInUrlFormat id file =
-    Task.attempt (GotPictureInUrlFormat id) (File.toUrl file)
+buttonStyle : Html.Attribute msg
+buttonStyle =
+    Attr.class "bg-gray-900 border border-gray-900 rounded px-4 py-2 uppercase text-gray-200 hover:text-gray-100 text-sm font-semibold hover:bg-black"
 
 
 getOnlyNewFiles : List Picture -> List File -> List File
@@ -339,16 +419,15 @@ getOnlyNewFiles picturesAndTheirDescriptions files =
         files
 
 
-makePicturesAndTheirDescriptions : Int -> List File -> List Picture
-makePicturesAndTheirDescriptions lastIdUsed files =
+makePictures : Int -> List File -> List Picture
+makePictures lastPosition files =
     List.indexedMap
         (\index file ->
             let
-                newId =
-                    lastIdUsed + index + 1
+                newPosition =
+                    lastPosition + index + 1
             in
-            { id = newId
-            , position = newId
+            { position = newPosition
             , picture = file
             , contentInURLFormat = ""
             , description = ""
@@ -361,7 +440,7 @@ getPicturesInUrlFormatCmds : List Picture -> List (Cmd Msg)
 getPicturesInUrlFormatCmds ps =
     List.map
         (\p ->
-            getPictureInUrlFormat p.id p.picture
+            Task.attempt (GotPictureInUrlFormat (File.name p.picture)) (File.toUrl p.picture)
         )
         ps
 
