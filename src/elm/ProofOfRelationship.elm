@@ -1,7 +1,9 @@
 port module ProofOfRelationship exposing (Model, Msg, init, initialModel, subscriptions, update, view)
 
+import Browser exposing (document)
+import Bytes
 import File exposing (File)
-import File.Download as Download
+import File.Download
 import File.Select
 import Html exposing (Html, button, div, h1, input, label, p, text)
 import Html.Attributes as Attr exposing (disabled, placeholder, type_, value)
@@ -26,18 +28,20 @@ type alias Picture =
 
 type alias Model =
     { pictures : List Picture
-    , documentsName : String
+    , documentName : String
     , pictureBeingDragged : Maybe Picture
     , pictureBeingDraggedOver : Maybe Picture
+    , debugMessage : String
     }
 
 
 initialModel : Model
 initialModel =
     { pictures = []
-    , documentsName = ""
+    , documentName = ""
     , pictureBeingDragged = Nothing
     , pictureBeingDraggedOver = Nothing
+    , debugMessage = ""
     }
 
 
@@ -58,6 +62,8 @@ init model =
 
 type Msg
     = HomeNextClicked
+    | TextDragStarted
+    | TextDragEnded
       -- Collect Details
     | DocumentNameInputted String
       -- Upload Pictures
@@ -73,6 +79,8 @@ type Msg
     | PictureDroppedOn Picture
       -- Download Documents
     | DownloadDocumentsClicked
+    | GotThePDF File
+    | GotThePDFsContents Bytes.Bytes
       -- Other
     | NoOp
 
@@ -88,9 +96,15 @@ update msg model =
         HomeNextClicked ->
             ( model, Cmd.none )
 
+        TextDragStarted ->
+            ( { model | debugMessage = "Text drag started" }, Cmd.none )
+
+        TextDragEnded ->
+            ( { model | debugMessage = "Text drag ended" }, Cmd.none )
+
         --  Collect Details
         DocumentNameInputted documentsName ->
-            ( { model | documentsName = documentsName }, Cmd.none )
+            ( { model | documentName = documentsName }, Cmd.none )
 
         -- Upload Pictures
         PicturesDropped files ->
@@ -175,16 +189,22 @@ update msg model =
             , Cmd.none
             )
 
-        PictureDragStarted pictureName ->
-            ( { model | pictureBeingDragged = Just pictureName }, Cmd.none )
+        PictureDragStarted picture ->
+            ( { model | pictureBeingDragged = Just picture, debugMessage = "Drag started" }, Cmd.none )
 
-        PictureDraggedOver pictureName ->
-            ( { model | pictureBeingDraggedOver = Just pictureName }, Cmd.none )
+        PictureDraggedOver picture ->
+            ( { model | pictureBeingDraggedOver = Just picture }, Cmd.none )
 
         PictureDragEnded ->
-            ( { model | pictureBeingDragged = Nothing, pictureBeingDraggedOver = Nothing }, Cmd.none )
+            ( { model
+                | pictureBeingDragged = Nothing
+                , pictureBeingDraggedOver = Nothing
+                , debugMessage = "Drag ended"
+              }
+            , Cmd.none
+            )
 
-        PictureDroppedOn p ->
+        PictureDroppedOn picture ->
             let
                 --  This is where we "move" the picture being dragged to the position of the picture it was dropped on
                 --  Remove the picture being dragged from the list
@@ -196,18 +216,38 @@ update msg model =
                             model.pictures
                                 |> List.filter (\pictureAndItsDescription -> pictureAndItsDescription /= pictureBeingDragged)
                                 |> List.sortBy .position
-                                |> List.partition (\currentPicture -> currentPicture.position < p.position)
+                                |> List.partition (\currentPicture -> currentPicture.position < picture.position)
                                 |> (\( before, after ) -> List.concat [ before, [ pictureBeingDragged ], after ])
                                 |> List.indexedMap (\index currentPicture -> { currentPicture | position = index })
 
                         Nothing ->
                             model.pictures
             in
-            ( { model | pictures = updatedPictures, pictureBeingDragged = Nothing }, Cmd.none )
+            ( { model
+                | pictures = updatedPictures
+                , pictureBeingDragged = Nothing
+                , debugMessage = "Dropped"
+              }
+            , Cmd.none
+            )
 
         -- Download Documents
         DownloadDocumentsClicked ->
-            ( model, renderThePDF <| getEncodedDocumentDefinition model.pictures )
+            ( model
+            , renderThePDF <|
+                Encode.object
+                    [ ( "documentName", Encode.string model.documentName )
+                    , ( "documentDefinition", getEncodedDocumentDefinition model.pictures )
+                    ]
+            )
+
+        GotThePDF pdf ->
+            -- Read the contents of the PDF in as bytes
+            -- and then download it
+            ( model, Task.perform GotThePDFsContents (File.toBytes pdf) )
+
+        GotThePDFsContents bytes ->
+            ( model, File.Download.bytes (model.documentName ++ ".pdf") "application/pdf" bytes )
 
         -- Other
         NoOp ->
@@ -228,32 +268,39 @@ port renderThePDF : Encode.Value -> Cmd msg
 view : Model -> Html Msg
 view model =
     div
-        [ Attr.class "container mx-auto flex flex-col gap-4 mt-8"
+        [ Attr.class "container mx-auto flex flex-col gap-4"
         ]
         [ h1
-            [ Attr.class "text-2xl font-bold" ]
+            [ Attr.class "text-2xl font-bold"
+            ]
             [ text "Proof of relationship" ]
         , div
-            [ Attr.class "flex flex-col gap-2" ]
-            [ p [] [ text "You’ll be led through the following steps to produce a document to help prove your relationship:" ]
+            [ Attr.class "flex flex-col gap-2"
+            ]
+            [ div
+                []
+                [ text "You’ll be led through the following steps to produce a document to help prove your relationship:" ]
 
             -- Collect Details
             , div
                 [ Attr.class "flex flex-col gap-2" ]
                 [ label [] [ text "The document's name" ]
-                , input [ type_ "text", placeholder "The document's name", value model.documentsName, onInput DocumentNameInputted ] []
+                , input [ type_ "text", placeholder "The document's name", value model.documentName, onInput DocumentNameInputted ] []
                 ]
 
             -- Upload Pictures
             , div
                 [ Attr.class "flex flex-col gap-2" ]
                 [ h1 [] [ text "Pictures" ]
-                , case model.pictures of
-                    [] ->
-                        viewDropZone
-
-                    _ ->
-                        viewPicturesList model
+                , viewPicturesList model
+                , button
+                    [ onClick AddPicturesClicked
+                    , onFilesDrop PicturesDropped
+                    , onDragOver NoOp
+                    , buttonStyle
+                    , Attr.class "w-max self-center"
+                    ]
+                    [ text "Add pictures" ]
                 ]
 
             -- Download Documents
@@ -272,33 +319,44 @@ view model =
 viewPicturesList : Model -> Html Msg
 viewPicturesList model =
     div
-        [ Attr.class "p-8 border border-grey-300 rounded flex gap-8 flex-wrap mx-auto"
+        [ Attr.class "p-8 border border-grey-300 rounded flex gap-8 flex-wrap mx-auto w-full justify-center"
         , onFilesDrop PicturesDropped
         , onDragOver NoOp
         ]
-        (List.map (viewPicture model) model.pictures)
+        (case model.pictures of
+            [] ->
+                [ div
+                    [ Attr.class "text-gray-300", disabled True ]
+                    [ text "No pictures to display yet" ]
+                ]
+
+            _ ->
+                List.map (viewPicture model) model.pictures
+        )
 
 
-viewDropZone : Html Msg
-viewDropZone =
-    div
-        [ Attr.class "flex flex-col gap-8 items-center justify-center p-8 w-full border-2 border-gray-100 hover:border-gray-200 hover:bg-gray-50 rounded"
-        , onFilesDrop PicturesDropped
-        , onDragOver NoOp
-        ]
-        [ div [ Attr.class "text-gray-300", disabled True ] [ text "Drag and drop pictures here" ]
-        , button
-            [ onClick AddPicturesClicked
-            , buttonStyle
-            ]
-            [ text "Add pictures" ]
-        ]
+
+-- viewDropZone : Html Msg
+-- viewDropZone =
+--     div
+--         [ Attr.class "flex flex-col gap-8 items-center justify-center p-8 w-full border-2 border-gray-100 hover:border-gray-200 hover:bg-gray-50 rounded"
+--         , onFilesDrop PicturesDropped
+--         , onDragOver NoOp
+--         ]
+--         [ div [ Attr.class "text-gray-300", disabled True ] [ text "Drag and drop pictures here" ]
+--         , button
+--             [ onClick AddPicturesClicked
+--             , buttonStyle
+--             , Attr.type_ "file"
+--             ]
+--             [ text "Add pictures" ]
+--         ]
 
 
 viewPicture : Model -> Picture -> Html Msg
 viewPicture model picture =
     div
-        [ Attr.class "group flex flex-col gap-2"
+        [ Attr.class "group flex flex-col gap-2 bg-white border border-gray-300 p-8"
         , Attr.class
             (case model.pictureBeingDragged of
                 Just p ->
@@ -325,10 +383,11 @@ viewPicture model picture =
             )
         ]
         [ div
-            [ Attr.class "relative bg-no-repeat bg-contain bg-center h-64 w-full"
+            [ Attr.draggable "true"
+            , Attr.class "relative bg-no-repeat bg-contain bg-center h-64 w-full"
             , Attr.style "background-image" ("url('" ++ picture.contentInURLFormat ++ "')")
             , onDragStart (PictureDragStarted picture)
-            , onDragOver (PictureDraggedOver picture)
+            , onDragOver NoOp
             , onDrop (PictureDroppedOn picture)
             , onDragEnd PictureDragEnded
             ]
@@ -353,10 +412,13 @@ viewPicture model picture =
 -- SUBSCRIPTIONS
 
 
+port gotThePDF : (Decode.Value -> msg) -> Sub msg
+
+
 subscriptions : Model -> Sub Msg
 subscriptions _ =
     Sub.batch
-        []
+        [ gotThePDF decodeThePDF ]
 
 
 
@@ -365,7 +427,7 @@ subscriptions _ =
 
 onDragStart : Msg -> Html.Attribute Msg
 onDragStart msg =
-    preventDefaultOn "dragstart" (Decode.succeed ( msg, True ))
+    Html.Events.on "dragstart" (Decode.succeed msg)
 
 
 onDragOver : Msg -> Html.Attribute Msg
@@ -375,7 +437,7 @@ onDragOver msg =
 
 onDragEnd : Msg -> Html.Attribute Msg
 onDragEnd msg =
-    preventDefaultOn "dragend" (Decode.succeed ( msg, True ))
+    Html.Events.on "dragend" (Decode.succeed msg)
 
 
 onDrop : Msg -> Html.Attribute Msg
@@ -390,6 +452,13 @@ onFilesDrop msg =
 
 
 -- DECODERS
+
+
+decodeThePDF : Decode.Value -> Msg
+decodeThePDF value =
+    Decode.decodeValue File.decoder value
+        |> Result.map GotThePDF
+        |> Result.withDefault NoOp
 
 
 filesDecoder : Decode.Decoder (List File)
@@ -501,5 +570,6 @@ getEncodedPictureDescription description =
     Encode.object
         [ ( "text", Encode.string description )
         , ( "fontSize", Encode.int 10 )
+        , ( "margin", Encode.list identity [ Encode.int 0, Encode.int 10, Encode.int 0, Encode.int 0 ] ) -- Add a margin to the top
         , ( "pageBreak", Encode.string "after" )
         ]

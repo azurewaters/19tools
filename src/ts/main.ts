@@ -19,7 +19,11 @@ app.ports.changeTheme.subscribe(function (data) {
 
 
 // Here's where we subscribe to the renderThePDF port
-app.ports.renderThePDF.subscribe(function (documentDefinition: Object) {
-  // This is where we render the PDF and send it back to Elm as a data URL
-  pdfMake.createPdf(documentDefinition).download('xyz.pdf')
+app.ports.renderThePDF.subscribe(function (data: Object) {
+  // This is where we render the PDF and send it back to Elm as a File object
+  let documentGenerator = pdfMake.createPdf(data.documentDefinition)
+  documentGenerator.getBlob((blob: Blob) => {
+    let file:File = new File([blob], data.documentName, {type: "application/pdf"})
+    app.ports.gotThePDF.send(file)
+  })
 })
