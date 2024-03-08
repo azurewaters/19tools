@@ -45,6 +45,7 @@
   },
   "dependencies": {
     "daisyui": "^3.9.4",
+    "pdf-lib": "^1.17.1",
     "pdfmake": "^0.2.9"
   }
 }

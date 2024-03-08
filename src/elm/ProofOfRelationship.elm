@@ -12,6 +12,7 @@ import Json.Decode as Decode
 import Json.Encode as Encode
 import ProofOfContact exposing (Model)
 import Task
+import Url.Builder exposing (absolute)
 
 
 type alias Picture =
@@ -38,7 +39,7 @@ type alias Model =
 initialModel : Model
 initialModel =
     { pictures = []
-    , documentName = ""
+    , documentName = "ABC"
     , pictureBeingDragged = Nothing
     , pictureBeingDraggedOver = Nothing
     , debugMessage = ""
@@ -233,11 +234,28 @@ update msg model =
 
         -- Download Documents
         DownloadDocumentsClicked ->
+            -- ( model
+            -- , renderThePDF <|
+            --     Encode.object
+            --         [ ( "documentName", Encode.string model.documentName )
+            --         , ( "documentDefinition", getEncodedDocumentDefinition model.pictures )
+            --         ]
+            -- )
             ( model
-            , renderThePDF <|
+            , renderThePDFWithPictures <|
                 Encode.object
-                    [ ( "documentName", Encode.string model.documentName )
-                    , ( "documentDefinition", getEncodedDocumentDefinition model.pictures )
+                    [ ( "pictures"
+                      , Encode.list identity <|
+                            List.map
+                                (\p ->
+                                    Encode.object
+                                        [ ( "contentInURLFormat", Encode.string p.contentInURLFormat )
+                                        , ( "name", Encode.string (File.name p.picture) )
+                                        , ( "description", Encode.string p.description )
+                                        ]
+                                )
+                                model.pictures
+                      )
                     ]
             )
 
@@ -259,6 +277,9 @@ update msg model =
 
 
 port renderThePDF : Encode.Value -> Cmd msg
+
+
+port renderThePDFWithPictures : Encode.Value -> Cmd msg
 
 
 
@@ -525,6 +546,7 @@ getEncodedDocumentDefinition ps =
         [ ( "content", Encode.list identity (List.concat [ getEncodedTitlePage, getEncodedPicturePages ps ]) )
         , ( "pageOrientation", Encode.string "landscape" )
         , ( "pageSize", Encode.string "A4" )
+        , ( "pageMargins", Encode.list identity [ Encode.int 0, Encode.int 0, Encode.int 0, Encode.int 0 ] )
         ]
 
 
@@ -559,9 +581,12 @@ getEncodedPicture : String -> Encode.Value
 getEncodedPicture contentInURLFormat =
     Encode.object
         [ ( "image", Encode.string contentInURLFormat )
-        , ( "width", Encode.string "840" )
-        , ( "fit", Encode.list identity [ Encode.int 842, Encode.int 500 ] ) -- The height has been reduced to accommodate the description
-        , ( "alignment", Encode.string "center" )
+        , ( "height", Encode.string "580" )
+        , ( "width", Encode.string "700" )
+        , ( "fit", Encode.list identity [ Encode.int 700, Encode.int 595 ] ) -- The height has been reduced to accommodate the description -- An A4 page is { width: 595.28, height: 841.89 } pts
+        , ( "absolutePosition", Encode.object [ ( "x", Encode.int 0 ), ( "y", Encode.int 0 ) ] )
+
+        -- , ( "alignment", Encode.string "center" )
         ]
 
 
@@ -570,6 +595,9 @@ getEncodedPictureDescription description =
     Encode.object
         [ ( "text", Encode.string description )
         , ( "fontSize", Encode.int 10 )
-        , ( "margin", Encode.list identity [ Encode.int 0, Encode.int 10, Encode.int 0, Encode.int 0 ] ) -- Add a margin to the top
+        , ( "height", Encode.int 580 )
+        , ( "width", Encode.int 240 )
+        , ( "margin", Encode.list identity [ Encode.int 10 ] ) -- Add a margin
+        , ( "absolutePosition", Encode.object [ ( "x", Encode.int 0 ), ( "y", Encode.int 700 ) ] )
         , ( "pageBreak", Encode.string "after" )
         ]
