@@ -29,17 +29,8 @@
     "prebuild": "elm-tooling install",
     "build": "tsc && vite build",
     "preview": "npm run build; vite preview",
-    "standard": "standard --fix src/**/*.js",
-    "markdown": "standard-markdown --fix src/**/*.md",
     "review": "elm-review --fix-all",
     "test": "elm-test-rs"
-  },
-  "standard": {
-    "ignore": [
-      "public",
-      "dist",
-      "elm.js"
-    ]
   },
   "dependencies": {
     "daisyui": "^3.9.4",

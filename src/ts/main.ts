@@ -24,10 +24,10 @@ app.ports.resizePicture.subscribe(async function (data: {
     const imageHeight = img.naturalHeight;
 
     //  A4's dimensions in pixels
-    const landscapeA4Width = 842 * 1.3333333333333333;
-    const landscapeA4Height = 595 * 1.3333333333333333;
-    const availableLandscapeA4Height =
-      landscapeA4Height - 60 * 1.333333333333333;
+    const ratio = 1.3333333333333333;
+    const landscapeA4Width = 842 * ratio;
+    const landscapeA4Height = 595 * ratio;
+    const availableLandscapeA4Height = landscapeA4Height - 60 * ratio;
 
     //  If the image is too large, resize it
     if (
@@ -44,6 +44,8 @@ app.ports.resizePicture.subscribe(async function (data: {
         newHeight = availableLandscapeA4Height;
         newWidth = (imageWidth / imageHeight) * availableLandscapeA4Height;
       }
+      newWidth = Math.floor(newWidth);
+      newHeight = Math.floor(newHeight);
 
       //  Now, draw the image according to these new dimensions
       const canvas = document.createElement("canvas");
@@ -55,6 +57,7 @@ app.ports.resizePicture.subscribe(async function (data: {
       if (ctx) {
         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
         var resizedDataUrl = canvas.toDataURL();
+        alert("Resized image's dimensions: " + newWidth + " " + newHeight);
         app.ports.gotResizedPicture.send({
           name: data.name,
           contents: resizedDataUrl,
@@ -99,29 +102,21 @@ app.ports.renderTheProofOfRelationship.subscribe(async function (data: {
       try {
         const page = document.addPage([PageSizes.A4[1], PageSizes.A4[0]]); //  Landscape
         page.setFont(helveticaFont);
-        //  Sizes
+
+        //  Calculate measurements
+        const ratio = 1.3333333333333333;
         const pageWidthInPoints = page.getWidth();
         const pageHeightInPoints = page.getHeight();
-
-        //  Debug
-        page.drawText(
-          `pageWidthInPoints: ${pageWidthInPoints}, pageHeightInPoints: ${pageHeightInPoints}, pictureWidthInPoints: ${
-            picture.width / 1.3333333333333333
-          }, pictureHeightInPoints: ${picture.height / 1.3333333333333333}`,
-          {
-            x: 0,
-            y: 0,
-            maxWidth: pageWidthInPoints,
-          },
-        );
+        const pictureWidthInPoints = picture.width / ratio;
+        const pictureHeightInPoints = picture.height / ratio;
 
         //  Add the picture at the centre and top of the page
         let eI: PDFImage = await document.embedPng(picture.contents);
         page.drawImage(eI, {
-          x: (pageWidthInPoints - picture.width / 1.3333333333333333) / 2,
-          y: 60,
-          width: picture.width / 1.3333333333333333,
-          height: picture.height / 1.3333333333333333 - 60,
+          x: (pageWidthInPoints - pictureWidthInPoints) / 2,
+          y: pageHeightInPoints - pictureHeightInPoints,
+          width: pictureWidthInPoints,
+          height: pictureHeightInPoints,
         });
 
         //  Add the description of the picture
@@ -135,8 +130,7 @@ app.ports.renderTheProofOfRelationship.subscribe(async function (data: {
           color: rgb(0, 0, 0),
         });
       } catch (error) {
-        alert("An error occurred here: " + error);
-        console.error("Error adding picture to PDF: " + error);
+        console.log(error);
       }
     });
 

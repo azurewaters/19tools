@@ -32,9 +32,8 @@ type alias PictureToBeResized =
 type alias ResizedPicture =
     { name : String
     , contents : String
-
-    -- , width : Int
-    -- , height : Int
+    , width : Int
+    , height : Int
     }
 
 
@@ -208,9 +207,8 @@ update msg model =
                             if picture.name == resizedPicture.name then
                                 { picture
                                     | contents = resizedPicture.contents
-
-                                    -- , width = resizedPicture.width
-                                    -- , height = resizedPicture.height
+                                    , width = resizedPicture.width
+                                    , height = resizedPicture.height
                                 }
 
                             else
@@ -606,10 +604,12 @@ filesDecoder =
 
 resizedPictureDecoder : Decode.Decoder ResizedPicture
 resizedPictureDecoder =
-    Decode.map2
+    Decode.map4
         ResizedPicture
         (Decode.field "name" Decode.string)
         (Decode.field "contents" Decode.string)
+        (Decode.field "width" Decode.int)
+        (Decode.field "height" Decode.int)
 
 
 
