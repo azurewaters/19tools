@@ -1,10 +1,7 @@
 {
   "editor.formatOnSave": true,
   "editor.formatOnPaste": true,
-  "editor.rulers": [
-    80,
-    120
-  ],
+  "editor.rulers": [80, 120],
   "editor.tabCompletion": "on",
   "editor.quickSuggestions": {
     "strings": true
@@ -84,6 +81,9 @@
   },
   "[toml]": {
     "editor.defaultFormatter": "tamasfe.even-better-toml"
+  },
+  "[typescript]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
   },
   "yaml.customTags": [
     "!encrypted/pkcs1-oaep scalar",

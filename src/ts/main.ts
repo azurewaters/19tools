@@ -1,91 +1,150 @@
-import '../css/styles.css'
-import { Elm } from '../elm/Main.elm'
-import Picture  from 'Picture.ts'
-//import * as pdfMake from "pdfmake/build/pdfmake";
-//import * as pdfFonts from 'pdfmake/build/vfs_fonts';
-
-//(<any>pdfMake).vfs = pdfFonts.pdfMake.vfs;
-
-
-import { PDFDocument, StandardFonts, PageSizes, rgb } from 'pdf-lib'
+import "../css/styles.css";
+import { Elm } from "../elm/Main.elm";
+import { PDFDocument, StandardFonts, PageSizes, rgb, PDFImage } from "pdf-lib";
 
 // Start the Elm application.
 const app = Elm.Main.init({
-  node: document.querySelector('main')
-})
+  node: document.querySelector("main"),
+});
 
 // Change between themes manually
-app.ports.changeTheme.subscribe(function (data) {
-  window.document.documentElement.setAttribute('data-theme', data)
-})
+app.ports.changeTheme.subscribe(function (data: string) {
+  window.document.documentElement.setAttribute("data-theme", data);
+});
 
-// Here's where we subscribe to the renderThePDF port
-// app.ports.renderThePDF.subscribe(function (data: Object) {
-  //   // This is where we render the PDF and send it back to Elm as a File object
-  //   let documentGenerator = pdfMake.createPdf(data.documentDefinition)
-  //   documentGenerator.getBlob((blob: Blob) => {
-    //     let file:File = new File([blob], data.documentName, {type: "application/pdf"})
-    //     app.ports.gotThePDF.send(file)
-    //   })
-    // })
+//  Resize pictures
+app.ports.resizePicture.subscribe(async function (data: {
+  name: string;
+  contents: string;
+}) {
+  const img = new Image();
+  img.onload = () => {
+    // Get the measurements of the image
+    const imageWidth = img.naturalWidth;
+    const imageHeight = img.naturalHeight;
 
+    //  A4's dimensions in pixels
+    const landscapeA4Width = 842 * 1.3333333333333333;
+    const landscapeA4Height = 595 * 1.3333333333333333;
+    const availableLandscapeA4Height =
+      landscapeA4Height - 60 * 1.333333333333333;
 
-app.ports.renderThePDFWithPictures.subscribe(async function (data: Object) {
-  // This is where we render the PDF and send it back to Elm as a File object using the PDFLib library
-  //  What we have been supplied with here are a list of Picture objects
-  //  Put each of those pictures into a PDF document, with the picture nthon the left and its description on the right of the picture.
-  const document:PDFDocument = await PDFDocument.create()
-  const helveticaFont = await document.embedFont(StandardFonts.Helvetica)
-
-  //  Now, loop through all the pictures and put them and their descriptions into the PDF
-  let pictures: Picture[] = data.pictures as Picture[]
-  pictures.forEach(async (picture:Picture) => {
-
-    try {
-      const page = document.addPage([ PageSizes.A4[1], PageSizes.A4[0] ])  //  Landscape
-      page.setFont(helveticaFont)
-
-      //  Sizes
-      // const { pageWidth, pageHeight } = page.getSize()
-      const pageWidth = page.getWidth()
-      const pageHeight = page.getHeight()
-      const textWidth = 200
-      const availableWidth = pageWidth - textWidth
-
-      //  Add the picture to the PDF
-      //  First, we need to check whethere the picture is a JPG or a PNG
-      let embeddedImage:PDFImage
-      if (picture.name.endsWith('.jpg') || picture.name.endsWith('.jpeg')) {
-        embeddedImage = await document.embedJpg(picture.contentInURLFormat)
-      } else if (String.endsWith(picture.name, '.png')) {
-        embeddedImage = await document.embedPng(picture.contentInURLFormat)
+    //  If the image is too large, resize it
+    if (
+      imageWidth > landscapeA4Width ||
+      imageHeight > availableLandscapeA4Height
+    ) {
+      //  Calculate the new dimensions of the image in points if it were to fit the width and available height
+      let newWidth: number;
+      let newHeight: number;
+      if (imageWidth > imageHeight) {
+        newWidth = landscapeA4Width;
+        newHeight = (imageHeight / imageWidth) * landscapeA4Width;
+      } else {
+        newHeight = availableLandscapeA4Height;
+        newWidth = (imageWidth / imageHeight) * availableLandscapeA4Height;
       }
-      //  Next, we need to scale the picture to fit the page's available width and height
-      let scaled = embeddedImage.scaleToFit(availableWidth, pageHeight)
-      page.drawImage(embeddedImage, {
-        x: 0,
-        y: (pageHeight - scaled.height) / 2,
-        width: scaled.width,
-        height: scaled.height
-      })
 
-      //  Now, add the description of the picture on the right of the picture
-      page.drawText(picture.description, {
-        x: scaled.width + 20,
-        y: ((pageHeight - scaled.height) / 2) + (scaled.height - 20),
-        font: helveticaFont,
-        size: 12,
-        maxWidth: textWidth - 40,
-        lineHeight: 15,
-        color: rgb(0, 0, 0)
-      })
-    } catch (e) {
-      alert(e)
+      //  Now, draw the image according to these new dimensions
+      const canvas = document.createElement("canvas");
+      canvas.width = newWidth;
+      canvas.height = newHeight;
+
+      // Draw the image onto the canvas
+      const ctx = canvas.getContext("2d");
+      if (ctx) {
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        var resizedDataUrl = canvas.toDataURL();
+        app.ports.gotResizedPicture.send({
+          name: data.name,
+          contents: resizedDataUrl,
+          width: newWidth,
+          height: newHeight,
+        });
+      }
+    } else {
+      //  If the image is not too large, just dispatch the event with the original image
+      app.ports.gotResizedPicture.send({
+        name: data.name,
+        contents: data.contents,
+        width: imageWidth,
+        height: imageHeight,
+      });
     }
-  });
+  };
+  img.src = data.contents;
+});
 
-  //  Now, download the file as a Blob
-  const pdfBlob:Blob = await document.save()
-  const file:File = new File([pdfBlob], data.documentName, {type: "application/pdf"})
-  app.ports.gotThePDF.send(file)
-})
+//  Render the PDF
+app.ports.renderTheProofOfRelationship.subscribe(async function (data: {
+  pictures: Picture[];
+}) {
+  const pictures: Picture[] = data.pictures;
+  if (pictures.length > 0) {
+    const document = await PDFDocument.create();
+    const helveticaFont = await document.embedFont(StandardFonts.Helvetica);
+
+    //  Add the title page
+    const titlePage = document.addPage([PageSizes.A4[1], PageSizes.A4[0]]);
+    titlePage.setFont(helveticaFont);
+    titlePage.drawText("Proof of Relationship", {
+      x: 100,
+      y: 400,
+      font: helveticaFont,
+      size: 20,
+      color: rgb(0, 0, 0),
+    });
+    //  Loop through all the pictures and put them and their descriptions into the PDF
+    pictures.forEach(async (picture: Picture) => {
+      try {
+        const page = document.addPage([PageSizes.A4[1], PageSizes.A4[0]]); //  Landscape
+        page.setFont(helveticaFont);
+        //  Sizes
+        const pageWidthInPoints = page.getWidth();
+        const pageHeightInPoints = page.getHeight();
+
+        //  Debug
+        page.drawText(
+          `pageWidthInPoints: ${pageWidthInPoints}, pageHeightInPoints: ${pageHeightInPoints}, pictureWidthInPoints: ${
+            picture.width / 1.3333333333333333
+          }, pictureHeightInPoints: ${picture.height / 1.3333333333333333}`,
+          {
+            x: 0,
+            y: 0,
+            maxWidth: pageWidthInPoints,
+          },
+        );
+
+        //  Add the picture at the centre and top of the page
+        let eI: PDFImage = await document.embedPng(picture.contents);
+        page.drawImage(eI, {
+          x: (pageWidthInPoints - picture.width / 1.3333333333333333) / 2,
+          y: 60,
+          width: picture.width / 1.3333333333333333,
+          height: picture.height / 1.3333333333333333 - 60,
+        });
+
+        //  Add the description of the picture
+        page.drawText(picture.description, {
+          x: 100,
+          y: 40,
+          font: helveticaFont,
+          size: 12,
+          maxWidth: pageWidthInPoints - 200,
+          lineHeight: 15,
+          color: rgb(0, 0, 0),
+        });
+      } catch (error) {
+        alert("An error occurred here: " + error);
+        console.error("Error adding picture to PDF: " + error);
+      }
+    });
+
+    //  Save the document and send it back to Elm
+    const pdf = await document.save();
+    const file = new File([pdf], "proof_of_relationship.pdf", {
+      type: "application/pdf",
+    });
+    app.ports.gotTheProofOfRelationship.send(file);
+  }
+});

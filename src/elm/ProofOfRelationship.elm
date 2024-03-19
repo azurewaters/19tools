@@ -1,25 +1,40 @@
 port module ProofOfRelationship exposing (Model, Msg, init, initialModel, subscriptions, update, view)
 
-import Browser exposing (document)
 import Bytes
 import File exposing (File)
 import File.Download
 import File.Select
-import Html exposing (Html, button, div, h1, input, label, p, text)
-import Html.Attributes as Attr exposing (disabled, placeholder, type_, value)
-import Html.Events exposing (onClick, onInput, preventDefaultOn)
+import Html exposing (Html, button, div, h1, img, input, label, p, text)
+import Html.Attributes as Attr exposing (attribute, disabled, height, placeholder, src, type_, value)
+import Html.Events exposing (on, onClick, onInput, preventDefaultOn)
 import Json.Decode as Decode
 import Json.Encode as Encode
 import ProofOfContact exposing (Model)
 import Task
-import Url.Builder exposing (absolute)
 
 
 type alias Picture =
     { position : Int
-    , picture : File
-    , contentInURLFormat : String
+    , name : String
+    , contents : String
     , description : String
+    , width : Int
+    , height : Int
+    }
+
+
+type alias PictureToBeResized =
+    { name : String
+    , contents : String
+    }
+
+
+type alias ResizedPicture =
+    { name : String
+    , contents : String
+
+    -- , width : Int
+    -- , height : Int
     }
 
 
@@ -28,21 +43,27 @@ type alias Picture =
 
 
 type alias Model =
-    { pictures : List Picture
-    , documentName : String
+    { documentName : String
+    , pictures : List Picture
+    , picturesToBeResized : List PictureToBeResized
+    , picturesToBeRenderedAsPDF : String
     , pictureBeingDragged : Maybe Picture
     , pictureBeingDraggedOver : Maybe Picture
     , debugMessage : String
+    , testImage : String
     }
 
 
 initialModel : Model
 initialModel =
-    { pictures = []
-    , documentName = "ABC"
+    { documentName = "ABC"
+    , pictures = []
+    , picturesToBeResized = []
+    , picturesToBeRenderedAsPDF = ""
     , pictureBeingDragged = Nothing
     , pictureBeingDraggedOver = Nothing
     , debugMessage = ""
+    , testImage = ""
     }
 
 
@@ -72,6 +93,7 @@ type Msg
     | PicturesSelected File (List File)
     | AddPicturesClicked
     | GotPictureInUrlFormat String (Result String String)
+    | GotResizedPicture ResizedPicture
     | PicturesDescriptionInputted String String
     | DeletePictureClicked String
     | PictureDragStarted Picture
@@ -80,9 +102,10 @@ type Msg
     | PictureDroppedOn Picture
       -- Download Documents
     | DownloadDocumentsClicked
-    | GotThePDF File
-    | GotThePDFsContents Bytes.Bytes
+    | GotTheProofOfRelationship File
+    | GotTheProofOfRelationshipsContents Bytes.Bytes
       -- Other
+    | Log String
     | NoOp
 
 
@@ -103,37 +126,57 @@ update msg model =
         TextDragEnded ->
             ( { model | debugMessage = "Text drag ended" }, Cmd.none )
 
-        --  Collect Details
         DocumentNameInputted documentsName ->
             ( { model | documentName = documentsName }, Cmd.none )
 
-        -- Upload Pictures
         PicturesDropped files ->
             let
                 -- Filter out the files that are already uploaded
                 -- Make a PictureAndItsDescription for each file with its id set to the next id
-                newPicturesAndTheirDescriptions =
+                newPictures =
                     files
                         |> getOnlyNewFiles model.pictures
                         |> makePictures (List.length model.pictures)
+
+                newPicturesFileNames =
+                    newPictures
+                        |> List.map .name
+
+                newFiles =
+                    files
+                        |> List.filter
+                            (\f ->
+                                List.member (File.name f) newPicturesFileNames
+                            )
             in
             ( { model
-                | pictures = model.pictures ++ newPicturesAndTheirDescriptions
+                | pictures = model.pictures ++ newPictures
               }
-            , Cmd.batch (getPicturesInUrlFormatCmds newPicturesAndTheirDescriptions)
+            , Cmd.batch (getPicturesInUrlFormatCmds newFiles)
             )
 
         PicturesSelected file files ->
             let
-                newPicturesAndTheirDescriptions =
+                newPictures =
                     (file :: files)
                         |> getOnlyNewFiles model.pictures
                         |> makePictures (List.length model.pictures)
+
+                newFiles =
+                    files
+                        |> List.filter
+                            (\f ->
+                                List.all
+                                    (\p ->
+                                        p.name /= File.name f
+                                    )
+                                    newPictures
+                            )
             in
             ( { model
-                | pictures = model.pictures ++ newPicturesAndTheirDescriptions
+                | pictures = model.pictures ++ newPictures
               }
-            , Cmd.batch (getPicturesInUrlFormatCmds newPicturesAndTheirDescriptions)
+            , Cmd.batch (getPicturesInUrlFormatCmds newFiles)
             )
 
         AddPicturesClicked ->
@@ -142,36 +185,65 @@ update msg model =
         GotPictureInUrlFormat picturesName result ->
             case result of
                 Ok pictureInUrlFormat ->
-                    let
-                        updatedPicturesAndTheirDescriptions : List Picture
-                        updatedPicturesAndTheirDescriptions =
-                            List.map
-                                (\pictureAndItsDescription ->
-                                    if File.name pictureAndItsDescription.picture == picturesName then
-                                        { pictureAndItsDescription | contentInURLFormat = pictureInUrlFormat }
-
-                                    else
-                                        pictureAndItsDescription
-                                )
-                                model.pictures
-                    in
-                    ( { model | pictures = updatedPicturesAndTheirDescriptions }
-                    , Cmd.none
+                    -- ( { model | picturesToBeResized = { name = picturesName, contents = pictureInUrlFormat } :: model.picturesToBeResized }
+                    ( model
+                    , Cmd.batch
+                        [ resizePicture <|
+                            Encode.object
+                                [ ( "name", Encode.string picturesName )
+                                , ( "contents", Encode.string pictureInUrlFormat )
+                                ]
+                        ]
                     )
 
                 Err _ ->
                     ( model, Cmd.none )
 
+        GotResizedPicture resizedPicture ->
+            let
+                updatedPictures : List Picture
+                updatedPictures =
+                    List.map
+                        (\picture ->
+                            if picture.name == resizedPicture.name then
+                                { picture
+                                    | contents = resizedPicture.contents
+
+                                    -- , width = resizedPicture.width
+                                    -- , height = resizedPicture.height
+                                }
+
+                            else
+                                picture
+                        )
+                        model.pictures
+
+                updatedPicturesToBeResized : List PictureToBeResized
+                updatedPicturesToBeResized =
+                    List.filter
+                        (\pictureToBeResized ->
+                            pictureToBeResized.name /= resizedPicture.name
+                        )
+                        model.picturesToBeResized
+            in
+            ( { model
+                | pictures = updatedPictures
+                , picturesToBeResized = updatedPicturesToBeResized
+                , debugMessage = "Got the resized picture"
+              }
+            , Cmd.none
+            )
+
         PicturesDescriptionInputted name description ->
             ( { model
                 | pictures =
                     List.map
-                        (\p ->
-                            if File.name p.picture == name then
-                                { p | description = description }
+                        (\picture ->
+                            if picture.name == name then
+                                { picture | description = description }
 
                             else
-                                p
+                                picture
                         )
                         model.pictures
               }
@@ -182,8 +254,8 @@ update msg model =
             ( { model
                 | pictures =
                     List.filter
-                        (\pictureAndItsDescription ->
-                            File.name pictureAndItsDescription.picture /= picturesName
+                        (\picture ->
+                            picture.name /= picturesName
                         )
                         model.pictures
               }
@@ -232,54 +304,52 @@ update msg model =
             , Cmd.none
             )
 
-        -- Download Documents
         DownloadDocumentsClicked ->
-            -- ( model
-            -- , renderThePDF <|
-            --     Encode.object
-            --         [ ( "documentName", Encode.string model.documentName )
-            --         , ( "documentDefinition", getEncodedDocumentDefinition model.pictures )
-            --         ]
-            -- )
+            -- This is where we take the Picture records and encode them into a JSON string and update the value in the model with it
             ( model
-            , renderThePDFWithPictures <|
+            , renderTheProofOfRelationship <|
                 Encode.object
                     [ ( "pictures"
-                      , Encode.list identity <|
-                            List.map
-                                (\p ->
+                      , model.pictures
+                            |> List.map
+                                (\picture ->
                                     Encode.object
-                                        [ ( "contentInURLFormat", Encode.string p.contentInURLFormat )
-                                        , ( "name", Encode.string (File.name p.picture) )
-                                        , ( "description", Encode.string p.description )
+                                        [ ( "position", Encode.int picture.position )
+                                        , ( "name", Encode.string picture.name )
+                                        , ( "contents", Encode.string picture.contents )
+                                        , ( "description", Encode.string picture.description )
+                                        , ( "width", Encode.int picture.width )
+                                        , ( "height", Encode.int picture.height )
                                         ]
                                 )
-                                model.pictures
+                            |> Encode.list identity
                       )
                     ]
             )
 
-        GotThePDF pdf ->
-            -- Read the contents of the PDF in as bytes
-            -- and then download it
-            ( model, Task.perform GotThePDFsContents (File.toBytes pdf) )
+        GotTheProofOfRelationship file ->
+            -- Read the PDF as bytes and then download it
+            ( { model | picturesToBeRenderedAsPDF = "", debugMessage = "Got the proof of proof of relationship" }, Task.perform GotTheProofOfRelationshipsContents (File.toBytes file) )
 
-        GotThePDFsContents bytes ->
-            ( model, File.Download.bytes (model.documentName ++ ".pdf") "application/pdf" bytes )
+        GotTheProofOfRelationshipsContents bytes ->
+            ( { model | debugMessage = model.debugMessage ++ " Got the contents" }, File.Download.bytes (model.documentName ++ ".pdf") "application/pdf" bytes )
 
         -- Other
+        Log message ->
+            ( { model | debugMessage = message }, Cmd.none )
+
         NoOp ->
-            ( model, Cmd.none )
+            ( { model | debugMessage = "Came to NoOp from somewhere" }, Cmd.none )
 
 
 
 -- PORTS
 
 
-port renderThePDF : Encode.Value -> Cmd msg
+port resizePicture : Encode.Value -> Cmd msg
 
 
-port renderThePDFWithPictures : Encode.Value -> Cmd msg
+port renderTheProofOfRelationship : Encode.Value -> Cmd msg
 
 
 
@@ -301,6 +371,9 @@ view model =
             [ div
                 []
                 [ text "You’ll be led through the following steps to produce a document to help prove your relationship:" ]
+
+            -- Debugging
+            , div [] [ text model.debugMessage ]
 
             -- Collect Details
             , div
@@ -333,8 +406,52 @@ view model =
                     ]
                     [ text "Download Documents" ]
                 ]
+
+            -- ImageResizers
+            -- , div [] [ text "There are ", text <| String.fromInt <| List.length model.picturesToBeResized, text " pictures to be resized" ]
+            -- , div
+            --     [ Attr.class "flex flex-col gap-2" ]
+            --     (List.map
+            --         (\pictureToBeResized ->
+            --             Html.node "image-resizer"
+            --                 [ attribute "src" pictureToBeResized.contents
+            --                 -- , on "resized" <| Decode.map (GotResizedPicture pictureToBeResized.name) resizedPictureDecoder
+            --                 -- , on "resized" resizedLogger
+            --                 ]
+            --                 []
+            --         )
+            --         model.picturesToBeResized
+            --     )
             ]
         ]
+
+
+resizedLogger : Decode.Decoder Msg
+resizedLogger =
+    Decode.map Log <| Decode.map String.fromInt <| Decode.at [ "detail", "width" ] Decode.int
+
+
+
+-- (Decode.map3
+--     ResizedPicture
+--     (Decode.at [ "detail", "dataURL" ] Decode.string)
+--     (Decode.at [ "detail", "width" ] Decode.int)
+--     (Decode.at [ "detail", "height" ] Decode.int)
+-- )
+
+
+pdfRenderer : String -> Html Msg
+pdfRenderer picturesToBeRenderedAsPDF =
+    case picturesToBeRenderedAsPDF of
+        "" ->
+            text "Nothing"
+
+        _ ->
+            Html.node "pdf-renderer"
+                [ attribute "pictures" picturesToBeRenderedAsPDF
+                , on "rendered" <| Decode.map GotTheProofOfRelationship (Decode.at [ "detail", "file" ] File.decoder)
+                ]
+                [ text "'", text picturesToBeRenderedAsPDF, text "'" ]
 
 
 viewPicturesList : Model -> Html Msg
@@ -352,26 +469,10 @@ viewPicturesList model =
                 ]
 
             _ ->
-                List.map (viewPicture model) model.pictures
+                [ div [] (List.map (viewPicture model) model.pictures)
+                , img [ src model.testImage ] []
+                ]
         )
-
-
-
--- viewDropZone : Html Msg
--- viewDropZone =
---     div
---         [ Attr.class "flex flex-col gap-8 items-center justify-center p-8 w-full border-2 border-gray-100 hover:border-gray-200 hover:bg-gray-50 rounded"
---         , onFilesDrop PicturesDropped
---         , onDragOver NoOp
---         ]
---         [ div [ Attr.class "text-gray-300", disabled True ] [ text "Drag and drop pictures here" ]
---         , button
---             [ onClick AddPicturesClicked
---             , buttonStyle
---             , Attr.type_ "file"
---             ]
---             [ text "Add pictures" ]
---         ]
 
 
 viewPicture : Model -> Picture -> Html Msg
@@ -406,7 +507,7 @@ viewPicture model picture =
         [ div
             [ Attr.draggable "true"
             , Attr.class "relative bg-no-repeat bg-contain bg-center h-64 w-full"
-            , Attr.style "background-image" ("url('" ++ picture.contentInURLFormat ++ "')")
+            , Attr.style "background-image" ("url('" ++ picture.contents ++ "')")
             , onDragStart (PictureDragStarted picture)
             , onDragOver NoOp
             , onDrop (PictureDroppedOn picture)
@@ -414,15 +515,16 @@ viewPicture model picture =
             ]
             [ div
                 [ Attr.class "invisible group-hover:visible absolute right-2 top-2 rounded-full bg-gray-100 border border-gray-200 p-2 hover:bg-gray-200"
-                , onClick (DeletePictureClicked (File.name picture.picture))
+                , onClick (DeletePictureClicked picture.name)
                 ]
                 [ text "x" ]
             ]
+        , div [] [ text "Width: ", text <| String.fromInt picture.width, text " Height: ", text <| String.fromInt picture.height ]
         , input
             [ type_ "text"
             , placeholder "Description"
             , value picture.description
-            , onInput (PicturesDescriptionInputted (File.name picture.picture))
+            , onInput (PicturesDescriptionInputted picture.name)
             , Attr.class "group-focus:border group-focus:border-gray-300 rounded placeholder:text-gray-300"
             ]
             []
@@ -433,13 +535,18 @@ viewPicture model picture =
 -- SUBSCRIPTIONS
 
 
-port gotThePDF : (Decode.Value -> msg) -> Sub msg
+port gotResizedPicture : (Decode.Value -> msg) -> Sub msg
+
+
+port gotTheProofOfRelationship : (Decode.Value -> msg) -> Sub msg
 
 
 subscriptions : Model -> Sub Msg
 subscriptions _ =
     Sub.batch
-        [ gotThePDF decodeThePDF ]
+        [ gotResizedPicture decodeResizedPicture
+        , gotTheProofOfRelationship decodeTheProofOfRelationship
+        ]
 
 
 
@@ -475,16 +582,34 @@ onFilesDrop msg =
 -- DECODERS
 
 
-decodeThePDF : Decode.Value -> Msg
-decodeThePDF value =
+decodeResizedPicture : Decode.Value -> Msg
+decodeResizedPicture value =
+    case Decode.decodeValue resizedPictureDecoder value of
+        Ok result ->
+            GotResizedPicture result
+
+        Err e ->
+            Log "Failed to decode the resized picture: "
+
+
+decodeTheProofOfRelationship : Decode.Value -> Msg
+decodeTheProofOfRelationship value =
     Decode.decodeValue File.decoder value
-        |> Result.map GotThePDF
-        |> Result.withDefault NoOp
+        |> Result.map GotTheProofOfRelationship
+        |> Result.withDefault (Log "Failed to decode the proof of relationship")
 
 
 filesDecoder : Decode.Decoder (List File)
 filesDecoder =
     Decode.at [ "dataTransfer", "files" ] (Decode.list File.decoder)
+
+
+resizedPictureDecoder : Decode.Decoder ResizedPicture
+resizedPictureDecoder =
+    Decode.map2
+        ResizedPicture
+        (Decode.field "name" Decode.string)
+        (Decode.field "contents" Decode.string)
 
 
 
@@ -497,14 +622,14 @@ buttonStyle =
 
 
 getOnlyNewFiles : List Picture -> List File -> List File
-getOnlyNewFiles picturesAndTheirDescriptions files =
+getOnlyNewFiles pictures files =
     List.filter
         (\file ->
             List.all
                 (\p ->
-                    File.name p.picture /= File.name file
+                    p.name /= File.name file
                 )
-                picturesAndTheirDescriptions
+                pictures
         )
         files
 
@@ -518,86 +643,20 @@ makePictures lastPosition files =
                     lastPosition + index + 1
             in
             { position = newPosition
-            , picture = file
-            , contentInURLFormat = ""
+            , name = File.name file
+            , contents = ""
             , description = ""
+            , width = 0
+            , height = 0
             }
         )
         files
 
 
-getPicturesInUrlFormatCmds : List Picture -> List (Cmd Msg)
-getPicturesInUrlFormatCmds ps =
+getPicturesInUrlFormatCmds : List File -> List (Cmd Msg)
+getPicturesInUrlFormatCmds files =
     List.map
-        (\p ->
-            Task.attempt (GotPictureInUrlFormat (File.name p.picture)) (File.toUrl p.picture)
+        (\f ->
+            Task.attempt (GotPictureInUrlFormat (File.name f)) (File.toUrl f)
         )
-        ps
-
-
-
--- PDF Document Description helpers
-
-
-getEncodedDocumentDefinition : List Picture -> Encode.Value
-getEncodedDocumentDefinition ps =
-    -- This is where we combine the TitlePage and the PicturePages and put it together into an encoded object called "content" and send that out
-    Encode.object
-        [ ( "content", Encode.list identity (List.concat [ getEncodedTitlePage, getEncodedPicturePages ps ]) )
-        , ( "pageOrientation", Encode.string "landscape" )
-        , ( "pageSize", Encode.string "A4" )
-        , ( "pageMargins", Encode.list identity [ Encode.int 0, Encode.int 0, Encode.int 0, Encode.int 0 ] )
-        ]
-
-
-getEncodedTitlePage : List Encode.Value
-getEncodedTitlePage =
-    [ Encode.object
-        [ ( "text", Encode.string "Proof of Relationship" )
-        , ( "fontSize", Encode.int 24 )
-        , ( "bold", Encode.bool True )
-        ]
-    , Encode.object
-        [ ( "text", Encode.string "This document contains pictures that establish my relationship with my sponsor." )
-        , ( "pageBreak", Encode.string "after" )
-        ]
-    ]
-
-
-getEncodedPicturePages : List Picture -> List Encode.Value
-getEncodedPicturePages ps =
-    List.map getEncodedPicturePage ps
-        |> List.concat
-
-
-getEncodedPicturePage : Picture -> List Encode.Value
-getEncodedPicturePage p =
-    [ getEncodedPicture p.contentInURLFormat
-    , getEncodedPictureDescription p.description
-    ]
-
-
-getEncodedPicture : String -> Encode.Value
-getEncodedPicture contentInURLFormat =
-    Encode.object
-        [ ( "image", Encode.string contentInURLFormat )
-        , ( "height", Encode.string "580" )
-        , ( "width", Encode.string "700" )
-        , ( "fit", Encode.list identity [ Encode.int 700, Encode.int 595 ] ) -- The height has been reduced to accommodate the description -- An A4 page is { width: 595.28, height: 841.89 } pts
-        , ( "absolutePosition", Encode.object [ ( "x", Encode.int 0 ), ( "y", Encode.int 0 ) ] )
-
-        -- , ( "alignment", Encode.string "center" )
-        ]
-
-
-getEncodedPictureDescription : String -> Encode.Value
-getEncodedPictureDescription description =
-    Encode.object
-        [ ( "text", Encode.string description )
-        , ( "fontSize", Encode.int 10 )
-        , ( "height", Encode.int 580 )
-        , ( "width", Encode.int 240 )
-        , ( "margin", Encode.list identity [ Encode.int 10 ] ) -- Add a margin
-        , ( "absolutePosition", Encode.object [ ( "x", Encode.int 0 ), ( "y", Encode.int 700 ) ] )
-        , ( "pageBreak", Encode.string "after" )
-        ]
+        files
