@@ -45,7 +45,6 @@ home =
 
 
 -- CANADIAN IMMIGRATION ENDPOINTS
--- PROOF OF RELATIONSHIP ENDPOINTS
 
 
 proofOfRelationshipHome : Endpoint
@@ -53,15 +52,11 @@ proofOfRelationshipHome =
     url [ "proofofrelationship" ] []
 
 
-proofOfRelationshipCollectDetails : Endpoint
-proofOfRelationshipCollectDetails =
-    url [ "proofofrelationship", "collectdetails" ] []
-
-
-
--- PROOF OF CONTACT ENDPOINTS
-
-
 proofOfContact : Endpoint
 proofOfContact =
-    url [ "canadianimmigration", "proofofcontact" ] []
+    url [ "proofofcontact" ] []
+
+
+index : Endpoint
+index =
+    url [ "index" ] []

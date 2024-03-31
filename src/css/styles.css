@@ -3,6 +3,101 @@
 @tailwind utilities;
 @tailwind variants;
 
-body {
-  font-family: "Poppins", sans-serif;
+/* Inter font stuff */
+:root {
+  font-family: Inter, sans-serif;
+  font-feature-settings:
+    "liga" 1,
+    "calt" 1; /* fix for Chrome */
+}
+@supports (font-variation-settings: normal) {
+  :root {
+    font-family: InterVariable, sans-serif;
+  }
+}
+
+/* Custom styles
+
+    - Colors
+        slate-950
+        slate-900
+        slate-800
+        slate-600
+        slate-400
+        slate-200
+        slate-100
+    - Typography
+        14px
+        16px
+
+    - Buttons
+    - Miscellany
+
+*/
+
+:root {
+  --gray-darkest: #020617; /* slate-950 */
+  --gray-darker: #0f172a; /* slate-900 */
+  --gray-dark: #1e293b; /* slate-800 */
+  --gray: #475569; /* slate-600 */
+  --gray-light: #94a3b8; /* slate-400 */
+  --gray-lighter: #e2e8f0; /* slate-200 */
+  --gray-lightest: #f1f5f9; /* slate-100 */
+
+  --green-dark: #34d399; /* emeral-400 */
+  --green-light: #a7f3d0; /* emeral-200 */
+
+  --greenbackgroundwithgreenborder: bg-green-200 berder border-green-400;
+}
+
+/* Styles */
+
+h1 {
+  @apply text-4xl font-bold text-gray-800;
+}
+
+h2 {
+  @apply text-3xl sm:text-4xl font-bold text-gray-800;
+}
+
+h3 {
+  @apply text-xl font-bold text-gray-800;
+}
+
+.textExplainer {
+  @apply text-xs text-gray-600;
+}
+
+/* Buttons */
+button {
+  @apply py-2.5 px-10 bg-gray-800 text-white rounded-sm lowercase font-medium;
+}
+
+button.small {
+  @apply py-1.5 px-5 bg-gray-800 text-white rounded-sm lowercase font-semibold text-sm;
+}
+
+/* Miscellany */
+hr {
+  @apply border-t border-gray-600;
+}
+
+footer {
+  @apply flex flex-col items-center gap-2 text-xs text-gray-600 p-8;
+}
+
+section {
+  @apply p-8 pb-16 bg-white;
+}
+
+section.green {
+  @apply bg-green-200 border border-green-400;
+}
+
+label {
+  @apply text-sm font-semibold text-gray-800 lowercase;
+}
+
+input {
+  @apply py-2 px-4 bg-white text-gray-800 rounded-sm border border-gray-800;
 }

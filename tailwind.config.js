@@ -1,24 +1,25 @@
 module.exports = {
   content: [
-    './index.html',
-    './src/js/main.js',
-    './src/css/styles.css',
-    './src/elm/**/*.elm'
+    "./index.html",
+    "./src/js/main.js",
+    "./src/css/styles.css",
+    "./src/elm/**/*.elm",
   ],
   theme: {
-    extend: {}
-    // fontFamily: {
-    //   sans: ['Lexend Deca', 'sans-serif']
-    // }
+    extend: {
+      fontFamily: {
+        sans: ["Inter var", "system-ui", "sans-serif"],
+      },
+    },
   },
   plugins: [
-    require('@tailwindcss/typography'),
-    require('@tailwindcss/forms'),
-    require('@tailwindcss/aspect-ratio'),
-    require('@tailwindcss/container-queries'),
-    require('daisyui')
+    require("@tailwindcss/typography"),
+    require("@tailwindcss/forms"),
+    require("@tailwindcss/aspect-ratio"),
+    require("@tailwindcss/container-queries"),
+    require("daisyui"),
   ],
   daisyui: {
-    themes: ['light', 'dark']
-  }
-}
+    themes: ["light", "dark"],
+  },
+};

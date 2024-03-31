@@ -1,8 +1,9 @@
 module Home exposing (..)
 
+import Accessibility exposing (h3)
 import Endpoint exposing (..)
-import Html exposing (Html, div, h1, text)
-import Html.Attributes as Attr exposing (href)
+import Html exposing (Html, button, div, h2, hr, section, text)
+import Html.Attributes as Attr exposing (class, href)
 
 
 
@@ -10,10 +11,10 @@ import Html.Attributes as Attr exposing (href)
 
 
 type alias Model =
-    { menuOptions : List MenuOptionDetails }
+    { menuOptions : List MenuOption }
 
 
-type alias MenuOptionDetails =
+type alias MenuOption =
     { title : String
     , description : String
     , endpoint : Endpoint
@@ -57,32 +58,45 @@ update msg model =
 view : Model -> Html Msg
 view _ =
     div
-        [ Attr.class "container mx-auto flex flex-col gap-4 mt-8"
+        [ class "container max-w-4xl mx-auto flex flex-col gap-16 mt-8"
         ]
-        [ menuOptionGroup
-            "Canadian Immigration Tools"
-            [ MenuOptionDetails "Proof of relationship" "Produce a document that helps prove your relationship to your sponsor." Endpoint.proofOfRelationshipHome
-            , MenuOptionDetails "Proof of contact" "Produce a document that helps prove you have had contact with your sponsor." Endpoint.proofOfContact
+        [ section
+            [ class "flex flex-row flex-wrap gap-8 items-center" ]
+            [ div
+                [ class "flex-1 flex flex-col gap-2" ]
+                [ h2 [ class "mb-10" ] [ text "about" ]
+                , div [] [ text "Amet deserunt deserunt nisi pariatur dolore ex incididunt commodo amet nisi veniam eiusmod. Anim minim eiusmod eiusmod ea tempor reprehenderit velit sit cupidatat sunt. Adipisicing sit quis nisi elit adipisicing ut anim non reprehenderit culpa mollit dolore occaecat. Enim magna esse ea est Lorem eiusmod labore veniam. Dolor anim quis sunt velit voluptate excepteur nostrud culpa elit. Sunt consectetur ullamco aute ad. Lorem consequat ipsum mollit ullamco nulla esse ipsum consequat sunt quis quis elit tempor." ]
+                ]
+            , div [ class "flex-1 border border-green-500" ] [ text "Illustration goes here" ]
             ]
+        , hr [] []
+        , menuOptionGroup
+            "immigration tools"
+            [ MenuOption "Proof of relationship" "Produce a document that helps prove your relationship to your sponsor." Endpoint.proofOfRelationshipHome
+            , MenuOption "Proof of contact" "Produce a document that helps prove you have had contact with your sponsor." Endpoint.proofOfContact
+            , MenuOption "Index" "Produce a document that puts a collection of documents together." Endpoint.index
+            ]
+        , hr [] []
         ]
 
 
-menuOptionGroup : String -> List MenuOptionDetails -> Html Msg
+menuOptionGroup : String -> List MenuOption -> Html Msg
 menuOptionGroup title menuOptionDetails =
-    div
-        [ Attr.class "flex flex-col gap-2"
+    section
+        [ class "green flex flex-col gap-2"
         ]
-        [ h1 [ Attr.class "text-2xl font-bold" ] [ text title ]
-        , div [ Attr.class "flex flex-col gap-2" ] (List.map menuOption menuOptionDetails)
+        [ h2 [ class "mb-10" ] [ text title ]
+        , div [ class "flex flex-row flex-wrap gap-8" ] (List.map menuOption menuOptionDetails)
         ]
 
 
-menuOption : MenuOptionDetails -> Html Msg
+menuOption : MenuOption -> Html Msg
 menuOption menuOptionDetails =
     Html.a
-        [ Attr.class "flex flex-col border border-slate-200 rounded-md p-4 hover:bg-slate-100"
+        [ class "bg-white border border-slate-600 flex flex-col items-start p-8 gap-4 rounded max-w-xs"
         , href (Endpoint.unwrap menuOptionDetails.endpoint)
         ]
-        [ div [ Attr.class "text-xl font-bold" ] [ text menuOptionDetails.title ]
+        [ h3 [] [ text menuOptionDetails.title ]
         , div [] [ text menuOptionDetails.description ]
+        , div [ class "w-full flex flex-row justify-end" ] [ button [ class "small" ] [ text "go" ] ]
         ]

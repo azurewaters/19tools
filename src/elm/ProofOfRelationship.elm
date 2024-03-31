@@ -1,16 +1,30 @@
 port module ProofOfRelationship exposing (Model, Msg, init, initialModel, subscriptions, update, view)
 
+import Accessibility exposing (h2)
 import Bytes
 import File exposing (File)
 import File.Download
 import File.Select
-import Html exposing (Html, button, div, h1, img, input, label, p, text)
-import Html.Attributes as Attr exposing (attribute, disabled, height, placeholder, src, type_, value)
-import Html.Events exposing (on, onClick, onInput, preventDefaultOn)
+import Html exposing (Html, button, div, hr, img, input, label, p, section, text)
+import Html.Attributes as Attr exposing (class, disabled, placeholder, src, type_, value)
+import Html.Events exposing (onClick, onInput, preventDefaultOn)
 import Json.Decode as Decode
 import Json.Encode as Encode
 import ProofOfContact exposing (Model)
 import Task
+
+
+
+-- MODEL
+
+
+type alias Model =
+    { documentName : String
+    , pictures : List Picture
+    , pictureBeingDragged : Maybe Picture
+    , pictureBeingDraggedOver : Maybe Picture
+    , debugMessage : String
+    }
 
 
 type alias Picture =
@@ -23,12 +37,6 @@ type alias Picture =
     }
 
 
-type alias PictureToBeResized =
-    { name : String
-    , contents : String
-    }
-
-
 type alias ResizedPicture =
     { name : String
     , contents : String
@@ -37,32 +45,13 @@ type alias ResizedPicture =
     }
 
 
-
--- MODEL
-
-
-type alias Model =
-    { documentName : String
-    , pictures : List Picture
-    , picturesToBeResized : List PictureToBeResized
-    , picturesToBeRenderedAsPDF : String
-    , pictureBeingDragged : Maybe Picture
-    , pictureBeingDraggedOver : Maybe Picture
-    , debugMessage : String
-    , testImage : String
-    }
-
-
 initialModel : Model
 initialModel =
     { documentName = "ABC"
     , pictures = []
-    , picturesToBeResized = []
-    , picturesToBeRenderedAsPDF = ""
     , pictureBeingDragged = Nothing
     , pictureBeingDraggedOver = Nothing
     , debugMessage = ""
-    , testImage = ""
     }
 
 
@@ -129,30 +118,35 @@ update msg model =
             ( { model | documentName = documentsName }, Cmd.none )
 
         PicturesDropped files ->
-            let
-                -- Filter out the files that are already uploaded
-                -- Make a PictureAndItsDescription for each file with its id set to the next id
-                newPictures =
-                    files
-                        |> getOnlyNewFiles model.pictures
-                        |> makePictures (List.length model.pictures)
+            case model.pictureBeingDragged of
+                Nothing ->
+                    let
+                        -- Filter out the files that are already uploaded
+                        -- Make a PictureAndItsDescription for each file with its id set to the next id
+                        newPictures =
+                            files
+                                |> getOnlyNewFiles model.pictures
+                                |> makePictures (List.length model.pictures)
 
-                newPicturesFileNames =
-                    newPictures
-                        |> List.map .name
+                        newPicturesFileNames =
+                            newPictures
+                                |> List.map .name
 
-                newFiles =
-                    files
-                        |> List.filter
-                            (\f ->
-                                List.member (File.name f) newPicturesFileNames
-                            )
-            in
-            ( { model
-                | pictures = model.pictures ++ newPictures
-              }
-            , Cmd.batch (getPicturesInUrlFormatCmds newFiles)
-            )
+                        newFiles =
+                            files
+                                |> List.filter
+                                    (\f ->
+                                        List.member (File.name f) newPicturesFileNames
+                                    )
+                    in
+                    ( { model
+                        | pictures = model.pictures ++ newPictures
+                      }
+                    , Cmd.batch (getPicturesInUrlFormatCmds newFiles)
+                    )
+
+                Just _ ->
+                    ( model, Cmd.none )
 
         PicturesSelected file files ->
             let
@@ -161,20 +155,18 @@ update msg model =
                         |> getOnlyNewFiles model.pictures
                         |> makePictures (List.length model.pictures)
 
+                newPicturesFileNames =
+                    newPictures
+                        |> List.map .name
+
                 newFiles =
-                    files
+                    (file :: files)
                         |> List.filter
                             (\f ->
-                                List.all
-                                    (\p ->
-                                        p.name /= File.name f
-                                    )
-                                    newPictures
+                                List.member (File.name f) newPicturesFileNames
                             )
             in
-            ( { model
-                | pictures = model.pictures ++ newPictures
-              }
+            ( { model | pictures = model.pictures ++ newPictures }
             , Cmd.batch (getPicturesInUrlFormatCmds newFiles)
             )
 
@@ -184,7 +176,6 @@ update msg model =
         GotPictureInUrlFormat picturesName result ->
             case result of
                 Ok pictureInUrlFormat ->
-                    -- ( { model | picturesToBeResized = { name = picturesName, contents = pictureInUrlFormat } :: model.picturesToBeResized }
                     ( model
                     , Cmd.batch
                         [ resizePicture <|
@@ -215,18 +206,9 @@ update msg model =
                                 picture
                         )
                         model.pictures
-
-                updatedPicturesToBeResized : List PictureToBeResized
-                updatedPicturesToBeResized =
-                    List.filter
-                        (\pictureToBeResized ->
-                            pictureToBeResized.name /= resizedPicture.name
-                        )
-                        model.picturesToBeResized
             in
             ( { model
                 | pictures = updatedPictures
-                , picturesToBeResized = updatedPicturesToBeResized
                 , debugMessage = "Got the resized picture"
               }
             , Cmd.none
@@ -327,7 +309,7 @@ update msg model =
 
         GotTheProofOfRelationship file ->
             -- Read the PDF as bytes and then download it
-            ( { model | picturesToBeRenderedAsPDF = "", debugMessage = "Got the proof of proof of relationship" }, Task.perform GotTheProofOfRelationshipsContents (File.toBytes file) )
+            ( { model | debugMessage = "Got the proof of proof of relationship" }, Task.perform GotTheProofOfRelationshipsContents (File.toBytes file) )
 
         GotTheProofOfRelationshipsContents bytes ->
             ( { model | debugMessage = model.debugMessage ++ " Got the contents" }, File.Download.bytes (model.documentName ++ ".pdf") "application/pdf" bytes )
@@ -357,118 +339,72 @@ port renderTheProofOfRelationship : Encode.Value -> Cmd msg
 view : Model -> Html Msg
 view model =
     div
-        [ Attr.class "container mx-auto flex flex-col gap-4"
+        [ class "container max-w-2xl mx-auto flex flex-col gap-16"
         ]
-        [ h1
-            [ Attr.class "text-2xl font-bold"
+        [ -- About the tool
+          section
+            [ class "flex flex-col gap-2"
             ]
-            [ text "Proof of relationship" ]
-        , div
-            [ Attr.class "flex flex-col gap-2"
+            [ h2
+                [ class "mb-10" ]
+                [ text "about" ]
+            , p [] [ text "The Immigration, Refugees and Citizenship of Canada (IRCC) mandates proof of relationship for specific immigration applications. This often includes submitting photographs documenting the relationship. Our tool aids in organizing these photos and descriptions into a formatted document, while also compressing large images to meet IRCC's document size restrictions." ]
             ]
-            [ div
-                []
-                [ text "You’ll be led through the following steps to produce a document to help prove your relationship:" ]
+        , hr [] []
 
-            -- Debugging
-            , div [] [ text model.debugMessage ]
-
-            -- Collect Details
+        -- The tool
+        , section
+            [ class "green flex flex-col gap-8" ]
+            [ -- Collect Details
+              h2 [] [ text "details" ]
             , div
-                [ Attr.class "flex flex-col gap-2" ]
-                [ label [] [ text "The document's name" ]
+                [ class "flex flex-col gap-2" ]
+                [ label [] [ text "Document name" ]
                 , input [ type_ "text", placeholder "The document's name", value model.documentName, onInput DocumentNameInputted ] []
+                , div [ class "textExplainer" ] [ text "ℹ The format suggested by IRCC is \"Last name - First Name, Middle Name - Proof of Relationship\"" ]
                 ]
 
             -- Upload Pictures
             , div
-                [ Attr.class "flex flex-col gap-2" ]
-                [ h1 [] [ text "Pictures" ]
+                [ class "flex flex-col gap-2" ]
+                [ label [] [ text "Pictures" ]
                 , viewPicturesList model
                 , button
                     [ onClick AddPicturesClicked
-                    , onFilesDrop PicturesDropped
-                    , onDragOver NoOp
-                    , buttonStyle
-                    , Attr.class "w-max self-center"
+                    , class "w-max self-end"
                     ]
                     [ text "Add pictures" ]
                 ]
 
             -- Download Documents
             , div
-                [ Attr.class "flex justify-end p-4" ]
+                [ class "flex justify-end" ]
                 [ button
                     [ onClick DownloadDocumentsClicked
-                    , buttonStyle
                     ]
                     [ text "Download Documents" ]
                 ]
-
-            -- ImageResizers
-            -- , div [] [ text "There are ", text <| String.fromInt <| List.length model.picturesToBeResized, text " pictures to be resized" ]
-            -- , div
-            --     [ Attr.class "flex flex-col gap-2" ]
-            --     (List.map
-            --         (\pictureToBeResized ->
-            --             Html.node "image-resizer"
-            --                 [ attribute "src" pictureToBeResized.contents
-            --                 -- , on "resized" <| Decode.map (GotResizedPicture pictureToBeResized.name) resizedPictureDecoder
-            --                 -- , on "resized" resizedLogger
-            --                 ]
-            --                 []
-            --         )
-            --         model.picturesToBeResized
-            --     )
             ]
+        , hr [] []
         ]
-
-
-resizedLogger : Decode.Decoder Msg
-resizedLogger =
-    Decode.map Log <| Decode.map String.fromInt <| Decode.at [ "detail", "width" ] Decode.int
-
-
-
--- (Decode.map3
---     ResizedPicture
---     (Decode.at [ "detail", "dataURL" ] Decode.string)
---     (Decode.at [ "detail", "width" ] Decode.int)
---     (Decode.at [ "detail", "height" ] Decode.int)
--- )
-
-
-pdfRenderer : String -> Html Msg
-pdfRenderer picturesToBeRenderedAsPDF =
-    case picturesToBeRenderedAsPDF of
-        "" ->
-            text "Nothing"
-
-        _ ->
-            Html.node "pdf-renderer"
-                [ attribute "pictures" picturesToBeRenderedAsPDF
-                , on "rendered" <| Decode.map GotTheProofOfRelationship (Decode.at [ "detail", "file" ] File.decoder)
-                ]
-                [ text "'", text picturesToBeRenderedAsPDF, text "'" ]
 
 
 viewPicturesList : Model -> Html Msg
 viewPicturesList model =
     div
-        [ Attr.class "p-8 border border-grey-300 rounded flex gap-8 flex-wrap mx-auto w-full justify-center"
+        [ class "p-8 mb-2 border border-gray-800 rounded-sm bg-white flex gap-8 flex-wrap mx-auto w-full justify-center"
         , onFilesDrop PicturesDropped
         , onDragOver NoOp
         ]
         (case model.pictures of
             [] ->
                 [ div
-                    [ Attr.class "text-gray-300", disabled True ]
-                    [ text "No pictures to display yet" ]
+                    [ class "text-gray-400", disabled True ]
+                    [ text "drop pictures here" ]
                 ]
 
             _ ->
                 [ div [] (List.map (viewPicture model) model.pictures)
-                , img [ src model.testImage ] []
                 ]
         )
 
@@ -476,8 +412,8 @@ viewPicturesList model =
 viewPicture : Model -> Picture -> Html Msg
 viewPicture model picture =
     div
-        [ Attr.class "group flex flex-col gap-2 bg-white border border-gray-300 p-8"
-        , Attr.class
+        [ class "relative group flex flex-col gap-2 border border-gray-400 p-8 rounded"
+        , class
             (case model.pictureBeingDragged of
                 Just p ->
                     if p == picture then
@@ -489,7 +425,7 @@ viewPicture model picture =
                 Nothing ->
                     "opacity-100"
             )
-        , Attr.class
+        , class
             (case model.pictureBeingDraggedOver of
                 Just p ->
                     if p == picture then
@@ -501,31 +437,30 @@ viewPicture model picture =
                 Nothing ->
                     ""
             )
+        , onDragStart (PictureDragStarted picture)
+        , onDragOver NoOp
+        , onDrop (PictureDroppedOn picture)
+        , onDragEnd PictureDragEnded
         ]
         [ div
             [ Attr.draggable "true"
-            , Attr.class "relative bg-no-repeat bg-contain bg-center h-64 w-full"
+            , class "bg-no-repeat bg-contain bg-center h-64 w-full"
             , Attr.style "background-image" ("url('" ++ picture.contents ++ "')")
-            , onDragStart (PictureDragStarted picture)
-            , onDragOver NoOp
-            , onDrop (PictureDroppedOn picture)
-            , onDragEnd PictureDragEnded
             ]
-            [ div
-                [ Attr.class "invisible group-hover:visible absolute right-2 top-2 rounded-full bg-gray-100 border border-gray-200 p-2 hover:bg-gray-200"
-                , onClick (DeletePictureClicked picture.name)
-                ]
-                [ text "x" ]
-            ]
-        , div [] [ text "Width: ", text <| String.fromInt picture.width, text " Height: ", text <| String.fromInt picture.height ]
+            []
         , input
             [ type_ "text"
             , placeholder "Description"
             , value picture.description
             , onInput (PicturesDescriptionInputted picture.name)
-            , Attr.class "group-focus:border group-focus:border-gray-300 rounded placeholder:text-gray-300"
+            , class "group-focus:border group-focus:border-gray-300 rounded placeholder:text-gray-300"
             ]
             []
+        , div
+            [ class "invisible group-hover:visible absolute right-4 top-4 w-8 h-8 p-2 rounded-full bg-gray-100 border border-gray-200 hover:bg-gray-200"
+            , onClick (DeletePictureClicked picture.name)
+            ]
+            [ img [ src "assets/x.svg", class "stroke-black" ] [] ]
         ]
 
 
@@ -586,7 +521,7 @@ decodeResizedPicture value =
         Ok result ->
             GotResizedPicture result
 
-        Err e ->
+        Err _ ->
             Log "Failed to decode the resized picture: "
 
 
@@ -608,17 +543,12 @@ resizedPictureDecoder =
         ResizedPicture
         (Decode.field "name" Decode.string)
         (Decode.field "contents" Decode.string)
-        (Decode.field "width" Decode.int)
-        (Decode.field "height" Decode.int)
+        (Decode.field "width" <| Decode.oneOf [ Decode.int, Decode.float |> Decode.map Basics.floor ])
+        (Decode.field "height" <| Decode.oneOf [ Decode.int, Decode.float |> Decode.map Basics.floor ])
 
 
 
 -- OTHER HELPER FUNCTIONS
-
-
-buttonStyle : Html.Attribute msg
-buttonStyle =
-    Attr.class "bg-gray-900 border border-gray-900 rounded px-4 py-2 uppercase text-gray-200 hover:text-gray-100 text-sm font-semibold hover:bg-black"
 
 
 getOnlyNewFiles : List Picture -> List File -> List File

@@ -1,6 +1,5 @@
 port module Main exposing (Model, Msg(..), main)
 
-import Accessibility.Aria as Aria
 import Browser exposing (Document)
 import Browser.Navigation as Nav
 import Home
@@ -9,10 +8,12 @@ import Html
         ( Html
         , a
         , div
+        , footer
         , header
+        , img
         , text
         )
-import Html.Attributes as Attr exposing (href)
+import Html.Attributes exposing (alt, class, href, src, style)
 import ProofOfContact
 import ProofOfRelationship
 import Url exposing (Url)
@@ -160,29 +161,58 @@ view model =
 
                 NotFoundPage ->
                     div [] [ text "Not found" ]
+
+        pageName =
+            case model.page of
+                HomePage _ ->
+                    "home"
+
+                ProofOfRelationshipPage _ ->
+                    "proof of relationship"
+
+                ProofOfContactPage _ ->
+                    "proof of contact"
+
+                NotFoundPage ->
+                    "not found"
     in
     { title = "19tools"
     , body =
         [ div
-            [ Aria.label "main content"
-            , Attr.class "flex flex-col justify-center items-start min-w-full min-h-full"
+            [ class "flex flex-col justify-start items-center min-w-full min-h-screen"
             ]
-            [ header_
+            [ header
+                [ class "p-8 flex flex-row items-baseline justify-between w-full" ]
+                [ div
+                    [ class "flex flex-row gap-4 items-baseline" ]
+                    [ a [ href "/", class "text-4xl font-bold tracking-tight" ] [ text "19tools" ]
+                    , div [ class "text-2xl" ] [ text pageName ]
+                    ]
+                , div
+                    [ class "flex flex-row gap-4 text-sm font-bold items-center" ]
+                    [ a [ href "/login" ] [ text "log in" ]
+                    , a [ href "/Sign up" ] [ text "sign up" ]
+                    , div [ class "bg-gray-600 border border-gray-600 rounded-full h-12 w-12 hover:bg-gray-400" ] []
+                    ]
+                ]
             , content
-            , footer
+            , footer []
+                [ a [ href "https://www.buymeacoffee.com/azurewaters" ]
+                    [ img
+                        [ src "https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png"
+                        , alt "Buy Me A Coffee"
+                        , style "height" "60px !important"
+                        , style "width" "217px !important;"
+                        , class "w-40 border border-gray-600 rounded-md mb-4"
+                        ]
+                        []
+                    ]
+                , div [] [ text "Need help? Write to 19tools@gmail.com" ]
+                , div [] [ text "Copyright (C) 2024 Azurewaters Inc. All rights reserved. Terms and Conditions apply." ]
+                ]
             ]
         ]
     }
-
-
-header_ : Html Msg
-header_ =
-    header [ Attr.class "text-lg p-4" ] [ a [ href "/" ] [ text "19tools" ] ]
-
-
-footer : Html Msg
-footer =
-    div [ Attr.class "flex items-center text-sm p-4" ] [ text "© 2024 19tools" ]
 
 
 
