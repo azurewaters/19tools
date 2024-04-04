@@ -2,7 +2,7 @@ module Home exposing (..)
 
 import Accessibility exposing (h3)
 import Endpoint exposing (..)
-import Html exposing (Html, button, div, h2, hr, section, text)
+import Html exposing (Html, button, div, h2, hr, p, section, text)
 import Html.Attributes as Attr exposing (class, href)
 
 
@@ -63,30 +63,28 @@ view _ =
         [ section
             [ class "flex flex-row flex-wrap gap-8 items-center" ]
             [ div
-                [ class "flex-1 flex flex-col gap-2" ]
-                [ h2 [ class "mb-10" ] [ text "about" ]
-                , div [] [ text "Amet deserunt deserunt nisi pariatur dolore ex incididunt commodo amet nisi veniam eiusmod. Anim minim eiusmod eiusmod ea tempor reprehenderit velit sit cupidatat sunt. Adipisicing sit quis nisi elit adipisicing ut anim non reprehenderit culpa mollit dolore occaecat. Enim magna esse ea est Lorem eiusmod labore veniam. Dolor anim quis sunt velit voluptate excepteur nostrud culpa elit. Sunt consectetur ullamco aute ad. Lorem consequat ipsum mollit ullamco nulla esse ipsum consequat sunt quis quis elit tempor." ]
+                [ class "flex-1 flex flex-col gap-8" ]
+                [ h2 [] [ text "about" ]
+                , p [ class "text-slate-600" ] [ text "Amet deserunt deserunt nisi pariatur dolore ex incididunt commodo amet nisi veniam eiusmod. Anim minim eiusmod eiusmod ea tempor reprehenderit velit sit cupidatat sunt. Adipisicing sit quis nisi elit adipisicing ut anim non reprehenderit culpa mollit dolore occaecat. Enim magna esse ea est Lorem eiusmod labore veniam. Dolor anim quis sunt velit voluptate excepteur nostrud culpa elit. Sunt consectetur ullamco aute ad. Lorem consequat ipsum mollit ullamco nulla esse ipsum consequat sunt quis quis elit tempor." ]
                 ]
-            , div [ class "flex-1 border border-green-500" ] [ text "Illustration goes here" ]
+            , div [ class "flex-1 border border-black text-center" ] [ text "Illustration goes here" ]
             ]
-        , hr [] []
         , menuOptionGroup
             "immigration tools"
-            [ MenuOption "Proof of relationship" "Produce a document that helps prove your relationship to your sponsor." Endpoint.proofOfRelationshipHome
+            [ MenuOption "Proof of relationship - Photographs" "Produce a document that helps prove your relationship to your sponsor." Endpoint.proofOfRelationshipHome
             , MenuOption "Proof of contact" "Produce a document that helps prove you have had contact with your sponsor." Endpoint.proofOfContact
             , MenuOption "Index" "Produce a document that puts a collection of documents together." Endpoint.index
             ]
-        , hr [] []
         ]
 
 
 menuOptionGroup : String -> List MenuOption -> Html Msg
 menuOptionGroup title menuOptionDetails =
     section
-        [ class "green flex flex-col gap-2"
+        [ class "coloured flex flex-col gap-8"
         ]
-        [ h2 [ class "mb-10" ] [ text title ]
-        , div [ class "flex flex-row flex-wrap gap-8" ] (List.map menuOption menuOptionDetails)
+        [ h2 [] [ text title ]
+        , div [ class "grid grid-cols-1 sm:grid-cols-2 gap-8" ] (List.map menuOption menuOptionDetails)
         ]
 
 
@@ -97,6 +95,6 @@ menuOption menuOptionDetails =
         , href (Endpoint.unwrap menuOptionDetails.endpoint)
         ]
         [ h3 [] [ text menuOptionDetails.title ]
-        , div [] [ text menuOptionDetails.description ]
+        , div [ class "flex-1" ] [ text menuOptionDetails.description ]
         , div [ class "w-full flex flex-row justify-end" ] [ button [ class "small" ] [ text "go" ] ]
         ]

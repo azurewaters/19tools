@@ -10,12 +10,13 @@ import Html
         , div
         , footer
         , header
+        , hr
         , img
         , text
         )
 import Html.Attributes exposing (alt, class, href, src, style)
 import ProofOfContact
-import ProofOfRelationship
+import ProofOfRelationshipPhotographs
 import Url exposing (Url)
 import Url.Parser exposing ((</>), s, string, top)
 
@@ -36,7 +37,7 @@ type alias Model =
 
 type Page
     = HomePage Home.Model
-    | ProofOfRelationshipPage ProofOfRelationship.Model
+    | ProofOfRelationshipPhotographsPage ProofOfRelationshipPhotographs.Model
     | ProofOfContactPage ProofOfContact.Model
     | NotFoundPage
 
@@ -82,7 +83,7 @@ type Msg
     | UrlChanged Url.Url
     | LinkClicked Browser.UrlRequest
     | GotHomeMsg Home.Msg
-    | GotProofOfRelationshipHomeMsg ProofOfRelationship.Msg
+    | GotProofOfRelationshipPhotographsMsg ProofOfRelationshipPhotographs.Msg
     | GotProofOfContactMsg ProofOfContact.Msg
 
 
@@ -118,10 +119,10 @@ update msg model =
                 _ ->
                     ( model, Cmd.none )
 
-        GotProofOfRelationshipHomeMsg proofOfRelationshipHomeMsg ->
+        GotProofOfRelationshipPhotographsMsg proofOfRelationshipHomeMsg ->
             case model.page of
-                ProofOfRelationshipPage proofOfRelationshipHomeModel ->
-                    ProofOfRelationship.update proofOfRelationshipHomeMsg proofOfRelationshipHomeModel
+                ProofOfRelationshipPhotographsPage proofOfRelationshipHomeModel ->
+                    ProofOfRelationshipPhotographs.update proofOfRelationshipHomeMsg proofOfRelationshipHomeModel
                         |> toProofOfRelationship model
 
                 _ ->
@@ -151,9 +152,9 @@ view model =
                     Home.view homeModel
                         |> Html.map GotHomeMsg
 
-                ProofOfRelationshipPage proofOfRelationshipHomeModel ->
-                    ProofOfRelationship.view proofOfRelationshipHomeModel
-                        |> Html.map GotProofOfRelationshipHomeMsg
+                ProofOfRelationshipPhotographsPage proofOfRelationshipHomeModel ->
+                    ProofOfRelationshipPhotographs.view proofOfRelationshipHomeModel
+                        |> Html.map GotProofOfRelationshipPhotographsMsg
 
                 ProofOfContactPage proofOfContactModel ->
                     ProofOfContact.view proofOfContactModel
@@ -167,7 +168,7 @@ view model =
                 HomePage _ ->
                     "home"
 
-                ProofOfRelationshipPage _ ->
+                ProofOfRelationshipPhotographsPage _ ->
                     "proof of relationship"
 
                 ProofOfContactPage _ ->
@@ -179,10 +180,10 @@ view model =
     { title = "19tools"
     , body =
         [ div
-            [ class "flex flex-col justify-start items-center min-w-full min-h-screen"
+            [ class "flex flex-col gap-8 items-center min-h-screen"
             ]
             [ header
-                [ class "p-8 flex flex-row items-baseline justify-between w-full" ]
+                [ class "p-8 flex flex-row items-baseline justify-between w-full border-b border-slate-200" ]
                 [ div
                     [ class "flex flex-row gap-4 items-baseline" ]
                     [ a [ href "/", class "text-4xl font-bold tracking-tight" ] [ text "19tools" ]
@@ -196,7 +197,8 @@ view model =
                     ]
                 ]
             , content
-            , footer []
+            , footer
+                [ class "mt-20 py-20 bg-slate-50 border-t border-slate-200 w-full text-slate-400" ]
                 [ a [ href "https://www.buymeacoffee.com/azurewaters" ]
                     [ img
                         [ src "https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png"
@@ -223,9 +225,9 @@ view model =
 subscriptions : Model -> Sub Msg
 subscriptions model =
     case model.page of
-        ProofOfRelationshipPage proofOfRelationshipHomeModel ->
-            ProofOfRelationship.subscriptions proofOfRelationshipHomeModel
-                |> Sub.map GotProofOfRelationshipHomeMsg
+        ProofOfRelationshipPhotographsPage proofOfRelationshipHomeModel ->
+            ProofOfRelationshipPhotographs.subscriptions proofOfRelationshipHomeModel
+                |> Sub.map GotProofOfRelationshipPhotographsMsg
 
         NotFoundPage ->
             Sub.none
@@ -250,7 +252,7 @@ urlParser =
     Url.Parser.oneOf
         [ Url.Parser.map Home top
         , Url.Parser.map ProofOfRelationship (s "proofofrelationship")
-        , Url.Parser.map (ProofOfContact "") (s "canadianimmigration" </> s "proofofcontact")
+        , Url.Parser.map (ProofOfContact "") (s "proofofcontact")
         ]
 
 
@@ -261,7 +263,7 @@ updateUrl url model =
             toHome model Home.init
 
         Just ProofOfRelationship ->
-            ProofOfRelationship.init ProofOfRelationship.initialModel
+            ProofOfRelationshipPhotographs.init ProofOfRelationshipPhotographs.initialModel
                 |> toProofOfRelationship model
 
         Just (ProofOfContact _) ->
@@ -278,10 +280,10 @@ toHome model ( homeModel, homeCommand ) =
     )
 
 
-toProofOfRelationship : Model -> ( ProofOfRelationship.Model, Cmd ProofOfRelationship.Msg ) -> ( Model, Cmd Msg )
+toProofOfRelationship : Model -> ( ProofOfRelationshipPhotographs.Model, Cmd ProofOfRelationshipPhotographs.Msg ) -> ( Model, Cmd Msg )
 toProofOfRelationship model ( proofOfRelationshipHomeModel, proofOfRelationshipHomeCommand ) =
-    ( { model | page = ProofOfRelationshipPage proofOfRelationshipHomeModel }
-    , Cmd.map GotProofOfRelationshipHomeMsg proofOfRelationshipHomeCommand
+    ( { model | page = ProofOfRelationshipPhotographsPage proofOfRelationshipHomeModel }
+    , Cmd.map GotProofOfRelationshipPhotographsMsg proofOfRelationshipHomeCommand
     )
 
 

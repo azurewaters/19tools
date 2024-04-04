@@ -79,6 +79,7 @@ app.ports.resizePicture.subscribe(async function (data: {
 
 //  Render the PDF
 app.ports.renderTheProofOfRelationship.subscribe(async function (data: {
+  sponsorName: string;
   pictures: Picture[];
 }) {
   const pictures: Picture[] = data.pictures;
@@ -89,13 +90,26 @@ app.ports.renderTheProofOfRelationship.subscribe(async function (data: {
     //  Add the title page
     const titlePage = document.addPage([PageSizes.A4[1], PageSizes.A4[0]]);
     titlePage.setFont(helveticaFont);
-    titlePage.drawText("Proof of Relationship", {
+
+    titlePage.drawText("Proof of Relationship - Photographs", {
       x: 100,
       y: 500,
       font: helveticaFont,
       size: 20,
       color: rgb(0, 0, 0),
     });
+
+    titlePage.drawText(
+      `This document contains ${data.pictures.length} photographs that prove that my sponsor, ${data.sponsorsName}, and I are in a relationship.`,
+      {
+        x: 100,
+        y: 450,
+        font: helveticaFont,
+        size: 12,
+        color: rgb(0, 0, 0),
+        maxWidth: PageSizes.A4[1] - 200,
+      },
+    );
 
     //  Loop through all the pictures and put them and their descriptions into the PDF
     pictures.forEach(async (picture: Picture) => {

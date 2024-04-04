@@ -1,12 +1,13 @@
-port module ProofOfRelationship exposing (Model, Msg, init, initialModel, subscriptions, update, view)
+port module ProofOfRelationshipPhotographs exposing (Model, Msg, init, initialModel, subscriptions, update, view)
 
 import Accessibility exposing (h2)
+import Bitwise exposing (or)
 import Bytes
 import File exposing (File)
 import File.Download
 import File.Select
-import Html exposing (Html, button, div, hr, img, input, label, p, section, text)
-import Html.Attributes as Attr exposing (class, disabled, placeholder, src, type_, value)
+import Html exposing (Html, button, div, hr, img, input, label, p, section, text, textarea)
+import Html.Attributes as Attr exposing (class, classList, disabled, placeholder, src, type_, value)
 import Html.Events exposing (onClick, onInput, preventDefaultOn)
 import Json.Decode as Decode
 import Json.Encode as Encode
@@ -19,11 +20,14 @@ import Task
 
 
 type alias Model =
-    { documentName : String
+    { applicantsLastName : String
+    , applicantsOtherNames : String
+    , sponsorsName : String
     , pictures : List Picture
     , pictureBeingDragged : Maybe Picture
     , pictureBeingDraggedOver : Maybe Picture
     , debugMessage : String
+    , showErrors : Bool
     }
 
 
@@ -47,11 +51,14 @@ type alias ResizedPicture =
 
 initialModel : Model
 initialModel =
-    { documentName = "ABC"
+    { applicantsLastName = ""
+    , applicantsOtherNames = ""
+    , sponsorsName = ""
     , pictures = []
     , pictureBeingDragged = Nothing
     , pictureBeingDraggedOver = Nothing
     , debugMessage = ""
+    , showErrors = False
     }
 
 
@@ -71,11 +78,10 @@ init model =
 
 
 type Msg
-    = HomeNextClicked
-    | TextDragStarted
-    | TextDragEnded
-      -- Collect Details
-    | DocumentNameInputted String
+    = -- Collect Details
+      ApplicantsLastNameInputted String
+    | ApplicantsOtherNamesInputted String
+    | SponsorsNameInputted String
       -- Upload Pictures
     | PicturesDropped (List File)
     | PicturesSelected File (List File)
@@ -105,17 +111,14 @@ update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
         -- Home
-        HomeNextClicked ->
-            ( model, Cmd.none )
+        ApplicantsLastNameInputted name ->
+            ( { model | applicantsLastName = name }, Cmd.none )
 
-        TextDragStarted ->
-            ( { model | debugMessage = "Text drag started" }, Cmd.none )
+        ApplicantsOtherNamesInputted name ->
+            ( { model | applicantsOtherNames = name }, Cmd.none )
 
-        TextDragEnded ->
-            ( { model | debugMessage = "Text drag ended" }, Cmd.none )
-
-        DocumentNameInputted documentsName ->
-            ( { model | documentName = documentsName }, Cmd.none )
+        SponsorsNameInputted name ->
+            ( { model | sponsorsName = name }, Cmd.none )
 
         PicturesDropped files ->
             case model.pictureBeingDragged of
@@ -285,34 +288,58 @@ update msg model =
             )
 
         DownloadDocumentsClicked ->
-            -- This is where we take the Picture records and encode them into a JSON string and update the value in the model with it
-            ( model
-            , renderTheProofOfRelationship <|
-                Encode.object
-                    [ ( "pictures"
-                      , model.pictures
-                            |> List.map
-                                (\picture ->
-                                    Encode.object
-                                        [ ( "position", Encode.int picture.position )
-                                        , ( "name", Encode.string picture.name )
-                                        , ( "contents", Encode.string picture.contents )
-                                        , ( "description", Encode.string picture.description )
-                                        , ( "width", Encode.int picture.width )
-                                        , ( "height", Encode.int picture.height )
-                                        ]
-                                )
-                            |> Encode.list identity
-                      )
-                    ]
-            )
+            --  First, we check to see if all the details that we wanted were typed in
+            --  If not, add the "required" class to the missing fields
+            --  All the fields are required fields
+            if model.applicantsLastName == "" || model.applicantsOtherNames == "" || model.sponsorsName == "" || List.length model.pictures == 0 then
+                ( { model | showErrors = True }, Cmd.none )
+
+            else
+                -- All required information has been filled in. Go ahead and make the PDF.
+                -- This is where we take the Picture records and encode them into a JSON string and update the value in the model with it.
+                ( { model | showErrors = False }
+                , renderTheProofOfRelationship <|
+                    Encode.object
+                        [ ( "sponsorsName", Encode.string model.sponsorsName )
+                        , ( "pictures"
+                          , model.pictures
+                                |> List.map
+                                    (\picture ->
+                                        Encode.object
+                                            [ ( "position", Encode.int picture.position )
+                                            , ( "name", Encode.string picture.name )
+                                            , ( "contents", Encode.string picture.contents )
+                                            , ( "description", Encode.string picture.description )
+                                            , ( "width", Encode.int picture.width )
+                                            , ( "height", Encode.int picture.height )
+                                            ]
+                                    )
+                                |> Encode.list identity
+                          )
+                        ]
+                )
 
         GotTheProofOfRelationship file ->
             -- Read the PDF as bytes and then download it
             ( { model | debugMessage = "Got the proof of proof of relationship" }, Task.perform GotTheProofOfRelationshipsContents (File.toBytes file) )
 
         GotTheProofOfRelationshipsContents bytes ->
-            ( { model | debugMessage = model.debugMessage ++ " Got the contents" }, File.Download.bytes (model.documentName ++ ".pdf") "application/pdf" bytes )
+            let
+                -- Remove all special characters from the name to make it a valid file name
+                lastNameForFileName =
+                    String.filter (\c -> Char.isAlphaNum c || c == ' ') model.applicantsLastName
+
+                otherNamesForFileName =
+                    String.filter (\c -> Char.isAlphaNum c || c == ' ') model.applicantsOtherNames
+
+                documentName =
+                    lastNameForFileName
+                        ++ " - "
+                        ++ otherNamesForFileName
+                        ++ " - Proof of Relationship - Photographs"
+                        ++ ".pdf"
+            in
+            ( { model | debugMessage = model.debugMessage ++ " Got the contents" }, File.Download.bytes documentName "application/pdf" bytes )
 
         -- Other
         Log message ->
@@ -348,20 +375,30 @@ view model =
             [ h2
                 [ class "mb-10" ]
                 [ text "about" ]
-            , p [] [ text "The Immigration, Refugees and Citizenship of Canada (IRCC) mandates proof of relationship for specific immigration applications. This often includes submitting photographs documenting the relationship. Our tool aids in organizing these photos and descriptions into a formatted document, while also compressing large images to meet IRCC's document size restrictions." ]
+            , p
+                [ class "text-slate-600" ]
+                [ text "The Immigration, Refugees and Citizenship of Canada (IRCC) mandates proof of relationship for specific immigration applications. Our tool helps organize photos and their descriptions into a formatted document, vhile compressing large images." ]
             ]
-        , hr [] []
 
         -- The tool
         , section
-            [ class "green flex flex-col gap-8" ]
+            [ class "coloured flex flex-col gap-8" ]
             [ -- Collect Details
               h2 [] [ text "details" ]
-            , div
-                [ class "flex flex-col gap-2" ]
-                [ label [] [ text "Document name" ]
-                , input [ type_ "text", placeholder "The document's name", value model.documentName, onInput DocumentNameInputted ] []
-                , div [ class "textExplainer" ] [ text "ℹ The format suggested by IRCC is \"Last name - First Name, Middle Name - Proof of Relationship\"" ]
+            , div [ class "flex flex-col gap-2" ]
+                [ label [] [ text "applicant's last name" ]
+                , input [ onInput ApplicantsLastNameInputted, type_ "text", placeholder "", value model.applicantsLastName, classList [ ( "error", model.applicantsLastName == "" && model.showErrors ) ] ] []
+                , div [ class "textExplainer -mt-1" ] [ text "Use the applicant's last name as it appears on a passport." ]
+                ]
+            , div [ class "flex flex-col gap-2" ]
+                [ label [] [ text "applicant's other names" ]
+                , input [ onInput ApplicantsOtherNamesInputted, type_ "text", placeholder "", value model.applicantsOtherNames, classList [ ( "error", model.applicantsOtherNames == "" && model.showErrors ) ] ] []
+                , div [ class "textExplainer -mt-1" ] [ text "Type in the applicant's first, middle and other names as they appear on a passport." ]
+                ]
+            , div [ class "flex flex-col gap-2" ]
+                [ label [] [ text "sponsor's name" ]
+                , input [ onInput SponsorsNameInputted, type_ "text", placeholder "", value model.sponsorsName, classList [ ( "error", model.sponsorsName == "" && model.showErrors ) ] ] []
+                , div [ class "textExplainer -mt-1" ] [ text "Type in the sponsor's full name here." ]
                 ]
 
             -- Upload Pictures
@@ -385,14 +422,14 @@ view model =
                     [ text "Download Documents" ]
                 ]
             ]
-        , hr [] []
         ]
 
 
 viewPicturesList : Model -> Html Msg
 viewPicturesList model =
     div
-        [ class "p-8 mb-2 border border-gray-800 rounded-sm bg-white flex gap-8 flex-wrap mx-auto w-full justify-center"
+        [ class "mb-2 p-8 border border-gray-800 rounded-sm bg-white flex flex-row flex-wrap gap-10 justify-center"
+        , classList [ ( "error", List.length model.pictures == 0 && model.showErrors ) ]
         , onFilesDrop PicturesDropped
         , onDragOver NoOp
         ]
@@ -404,56 +441,50 @@ viewPicturesList model =
                 ]
 
             _ ->
-                [ div [] (List.map (viewPicture model) model.pictures)
-                ]
+                List.map (viewPicture model) model.pictures
         )
 
 
 viewPicture : Model -> Picture -> Html Msg
 viewPicture model picture =
     div
-        [ class "relative group flex flex-col gap-2 border border-gray-400 p-8 rounded"
-        , class
-            (case model.pictureBeingDragged of
-                Just p ->
-                    if p == picture then
-                        "opacity-50"
+        [ class "relative group border border-gray-400 p-8 rounded w-full flex flex-col gap-8"
 
-                    else
-                        "opacity-100"
-
-                Nothing ->
-                    "opacity-100"
-            )
-        , class
-            (case model.pictureBeingDraggedOver of
-                Just p ->
-                    if p == picture then
-                        "border-dashed border-2 border-gray-200"
-
-                    else
-                        ""
-
-                Nothing ->
-                    ""
-            )
+        -- , class
+        --     (case model.pictureBeingDragged of
+        --         Just p ->
+        --             if p == picture then
+        --                 "opacity-50"
+        --             else
+        --                 "opacity-100"
+        --         Nothing ->
+        --             "opacity-100"
+        --     )
+        -- , class
+        --     (case model.pictureBeingDraggedOver of
+        --         Just p ->
+        --             if p == picture then
+        --                 "border-dashed border-2 border-gray-200"
+        --             else
+        --                 ""
+        --         Nothing ->
+        --             ""
+        --     )
+        , Attr.draggable "true"
         , onDragStart (PictureDragStarted picture)
-        , onDragOver NoOp
         , onDrop (PictureDroppedOn picture)
         , onDragEnd PictureDragEnded
         ]
         [ div
-            [ Attr.draggable "true"
-            , class "bg-no-repeat bg-contain bg-center h-64 w-full"
+            [ class "bg-no-repeat bg-contain bg-top h-64"
             , Attr.style "background-image" ("url('" ++ picture.contents ++ "')")
             ]
             []
-        , input
-            [ type_ "text"
-            , placeholder "Description"
+        , textarea
+            [ placeholder "Description"
             , value picture.description
             , onInput (PicturesDescriptionInputted picture.name)
-            , class "group-focus:border group-focus:border-gray-300 rounded placeholder:text-gray-300"
+            , class "text-sm border border-gray-400 rounded placeholder:text-gray-300"
             ]
             []
         , div
