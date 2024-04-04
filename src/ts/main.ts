@@ -27,7 +27,6 @@ app.ports.resizePicture.subscribe(async function (data: {
     //  A4's dimensions in pixels
     const pointToPixelRatio = 1.333;
     const landscapeA4Width = PageSizes.A4[1] * pointToPixelRatio;
-    const landscapeA4Height = PageSizes.A4[0] * pointToPixelRatio;
     const availableLandscapeA4Height =
       (PageSizes.A4[0] - 60) * pointToPixelRatio;
 
@@ -56,7 +55,7 @@ app.ports.resizePicture.subscribe(async function (data: {
       const ctx = canvas.getContext("2d");
       if (ctx) {
         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-        var resizedDataUrl = canvas.toDataURL({ type: "image/png" });
+        var resizedDataUrl = canvas.toDataURL("image/png");
         app.ports.gotResizedPicture.send({
           name: data.name,
           contents: resizedDataUrl,
@@ -79,7 +78,7 @@ app.ports.resizePicture.subscribe(async function (data: {
 
 //  Render the PDF
 app.ports.renderTheProofOfRelationship.subscribe(async function (data: {
-  sponsorName: string;
+  sponsorsName: string;
   pictures: Picture[];
 }) {
   const pictures: Picture[] = data.pictures;
