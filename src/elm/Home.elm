@@ -2,8 +2,8 @@ module Home exposing (..)
 
 import Accessibility exposing (h3)
 import Endpoint exposing (..)
-import Html exposing (Html, button, div, h2, hr, p, section, text)
-import Html.Attributes as Attr exposing (class, href)
+import Html exposing (Html, button, div, h2, hr, img, p, section, text)
+import Html.Attributes as Attr exposing (class, href, src)
 
 
 
@@ -67,7 +67,7 @@ view _ =
                 [ h2 [] [ text "about" ]
                 , p [ class "text-slate-600" ] [ text "Amet deserunt deserunt nisi pariatur dolore ex incididunt commodo amet nisi veniam eiusmod. Anim minim eiusmod eiusmod ea tempor reprehenderit velit sit cupidatat sunt. Adipisicing sit quis nisi elit adipisicing ut anim non reprehenderit culpa mollit dolore occaecat. Enim magna esse ea est Lorem eiusmod labore veniam. Dolor anim quis sunt velit voluptate excepteur nostrud culpa elit. Sunt consectetur ullamco aute ad. Lorem consequat ipsum mollit ullamco nulla esse ipsum consequat sunt quis quis elit tempor." ]
                 ]
-            , div [ class "flex-1 border border-black text-center" ] [ text "Illustration goes here" ]
+            , div [ class "flex-1" ] [ img [ src "assets/hompage-illustration.svg" ] [] ]
             ]
         , menuOptionGroup
             "immigration tools"

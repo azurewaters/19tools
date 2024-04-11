@@ -198,7 +198,7 @@ view model =
                 ]
             , content
             , footer
-                [ class "mt-20 py-20 bg-slate-50 border-t border-slate-200 w-full text-slate-400" ]
+                [ class "mt-20 py-20 bg-slate-950 border-t border-slate-200 w-full text-slate-400" ]
                 [ a [ href "https://www.buymeacoffee.com/azurewaters" ]
                     [ img
                         [ src "https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png"

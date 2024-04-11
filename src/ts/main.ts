@@ -84,7 +84,13 @@ app.ports.renderTheProofOfRelationship.subscribe(async function (data: {
   const pictures: Picture[] = data.pictures;
   if (pictures.length > 0) {
     const document = await PDFDocument.create();
-    const helveticaFont = await document.embedFont(StandardFonts.Helvetica);
+    const helveticaFont = await document.embedFont(StandardFonts.Helvetica, {
+      subset: true,
+    });
+    const helveticaBoldFont = await document.embedFont(
+      StandardFonts.HelveticaBold,
+      { subset: true },
+    );
 
     //  Add the title page
     const titlePage = document.addPage([PageSizes.A4[1], PageSizes.A4[0]]);
@@ -93,7 +99,7 @@ app.ports.renderTheProofOfRelationship.subscribe(async function (data: {
     titlePage.drawText("Proof of Relationship - Photographs", {
       x: 100,
       y: 500,
-      font: helveticaFont,
+      font: helveticaBoldFont,
       size: 20,
       color: rgb(0, 0, 0),
     });

@@ -414,13 +414,11 @@ view model =
                 ]
 
             -- Download Documents
-            , div
-                [ class "flex justify-end" ]
-                [ button
-                    [ onClick DownloadDocumentsClicked
-                    ]
-                    [ text "Download Documents" ]
+            , button
+                [ onClick DownloadDocumentsClicked
+                , class "self-end"
                 ]
+                [ text "Download Documents" ]
             ]
         ]
 
