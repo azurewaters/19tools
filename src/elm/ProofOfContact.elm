@@ -277,6 +277,12 @@ view model =
                     ]
                 ]
             ]
+        , div
+            [ onFilesDrop FilesDropped
+            , onDragOver NoOp
+            , class "w-full h-16 bg-white border border-slate-600"
+            ]
+            []
         ]
 
 
@@ -341,7 +347,7 @@ onDrop msg =
 -- Files drop
 
 
-onFilesDrop : (List File -> msg) -> Html.Attribute msg
+onFilesDrop : (List File -> Msg) -> Html.Attribute Msg
 onFilesDrop msg =
     Events.preventDefaultOn "drop" (Decode.map2 Tuple.pair (Decode.map msg filesDecoder) (Decode.succeed True))
 
